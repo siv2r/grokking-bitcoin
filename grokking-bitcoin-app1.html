@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 2.0.15">
+<meta name="author" content="Kalle Rosenbaum">
+<title>Grokking Bitcoin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="style/asciidoctor.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="style/grokking-bitcoin.css">
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  messageStyle: "none",
+  tex2jax: {
+    inlineMath: [["\\(", "\\)"]],
+    displayMath: [["\\[", "\\]"]],
+    ignoreClass: "nostem|nolatexmath"
+  },
+  asciimath2jax: {
+    delimiters: [["\\$", "\\$"]],
+    ignoreClass: "nostem|noasciimath"
+  },
+  TeX: { equationNumbers: { autoNumber: "none" } }
+});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_HTMLorMML"></script>
+</head>
+<body class="book toc2 toc-left">
+<div id="header">
+<h1>Grokking Bitcoin</h1>
+<div class="details">
+<span id="author" class="author">Kalle Rosenbaum</span><br>
+</div>
+<div id="toc" class="toc2">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#app1">Appendix A: Using bitcoin-cli</a>
+<ul class="sectlevel2">
+<li><a href="#_communicating_with_bitcoind">A.1. Communicating with bitcoind</a>
+<ul class="sectlevel3">
+<li><a href="#_using_curl">A.1.1. Using curl</a></li>
+</ul>
+</li>
+<li><a href="#_graphical_user_interface">A.2. Graphical user interface</a></li>
+<li><a href="#_getting_to_know_bitcoin_cli">A.3. Getting to know bitcoin-cli</a></li>
+<li><a href="#_getting_to_work">A.4. Getting to work</a>
+<ul class="sectlevel3">
+<li><a href="#_creating_an_encrypted_wallet">A.4.1. Creating an encrypted wallet</a></li>
+<li><a href="#_backing_up_the_wallet">A.4.2. Backing up the wallet</a></li>
+<li><a href="#_receiving_money">A.4.3. Receiving money</a></li>
+<li><a href="#_sending_money">A.4.4. Sending money</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="app1">Appendix A: Using bitcoin-cli</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This appendix continues from <a href="#run-your-own-full-node">[run-your-own-full-node]</a>. I’ll show you
+how to set up a Bitcoin wallet, receive and send bitcoins, and explore
+the Bitcoin blockchain using <code>bitcoin-cli</code>, Bitcoin Core’s
+command-line tool.</p>
+</div>
+<div class="paragraph">
+<p>Note that this appendix won’t go into great depth on <code>bitcoin-cli</code>.
+This should only be regarded as a source of inspiration; it will
+provide you with the basics to get started. You’re encouraged to
+explore further.</p>
+</div>
+<div class="sect2">
+<h3 id="_communicating_with_bitcoind">A.1. Communicating with bitcoind</h3>
+<div class="paragraph">
+<p>When <code>bitcoind</code> starts, it also starts a web server that listens on TCP
+port 8332 by default. When you use <code>bitcoin-cli</code>, it will connect to the
+web server, send your command to the web server over HTTP, and display
+relevant parts of the response to you.</p>
+</div>
+<div class="paragraph">
+<p>For example, suppose I want to know the block ID of the genesis block
+(the block at height 0), and I issue the following command:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli getblockhash 0</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>bitcoin-cli</code> creates an HTTP <code>POST</code> request with the body</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>{"method":"getblockhash","params":[0],"id":1}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>and sends it to the web server that <code>bitcoind</code> runs. The request body’s
+<code>method</code> property is the command you want to execute, and the argument
+<code>0</code> is passed to the web server as an array with a single element.</p>
+</div>
+<div class="paragraph">
+<p>The web server processes the HTTP request by looking up the block hash
+in the blockchain and replies with an HTTP response with the following
+body:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>{"result":"000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f","error":null,"id":"1"}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>bitcoin-cli</code> then displays the value of the <code>result</code> property on the
+terminal:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This body of the HTTP request follows a standard called JSON-RPC, which
+describes how a client can call functions on a remote process using
+JavaScript Object Notation (JSON).</p>
+</div>
+<div class="sect3">
+<h4 id="_using_curl">A.1.1. Using curl</h4>
+<div class="paragraph">
+<p>Because the communication with <code>bitcoind</code> happens through <code>HTTP</code>, any
+program that can send <code>HTTP POST</code> requests, such as the command-line
+tool <code>curl</code>, can be used to communicate with <code>bitcoind</code>. But to use
+tools other than <code>bitcoin-cli</code>, you need to set up a username and
+password to use as authentication to the web server.</p>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">More parameters</div>
+<div class="paragraph">
+<p>Bitcoin Core offers a lot of options. Run <code>./bitcoind --help</code> to get a
+complete list.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Stop the node with <code>./bitcoin-cli stop</code>. Open—or create, if it doesn’t
+exist—Bitcoin Core’s configuration file ~/.bitcoin/bitcoin.conf, and add
+these lines:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>rpcuser=&lt;a username that you select&gt;
+rpcpassword=&lt;a password that you select&gt;</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After you’ve modified and saved the ~/.bitcoin/bitcoin.conf file, start
+your node using <code>./bitcoind -daemon</code>, to make the changes effective.</p>
+</div>
+<div class="paragraph">
+<p>Here’s how I called <code>getblockhash</code> using <code>curl</code> (the backslash <code>\</code>
+character means the command continues on the next line):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>curl --user kalle --data-binary \
+    '{"method":"getblockhash","params":[0],"id":1}' \
+    -H 'content-type: text/plain;' http://127.0.0.1:8332/
+Enter host password for user 'kalle':
+{"result":"000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f","error":null,"id":1}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Remember to change the username from <code>kalle</code> to the username you
+configured in bitcoin.conf.</p>
+</div>
+<div class="paragraph">
+<p>This command will prompt you for the password. Enter the password, and
+press Enter. The reply from the web server will be the same as when you
+used <code>bitcoin-cli</code>, but you’ll need to scan through the response body to
+spot the result, which is the hash of block 0.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_graphical_user_interface">A.2. Graphical user interface</h3>
+<div class="paragraph">
+<p>Bitcoin Core comes with a graphical user interface (GUI). This appendix
+mainly deals with the command-line interface <code>bitcoin-cli</code> for
+controlling and querying your running <code>bitcoind</code>. But if you want to use
+Bitcoin Core as a Bitcoin wallet (and not just as a full node), it can
+be useful to familiarize yourself with the GUI version. The GUI version
+of Bitcoin Core lets you perform most common tasks expected from a
+Bitcoin wallet, but to access Bitcoin Core’s full set of features,
+you’ll need to use <code>bitcoin-cli</code>.</p>
+</div>
+<div class="paragraph">
+<p>To use the GUI version of Bitcoin Core, you need to stop the current
+node and start the GUI version, called <code>bitcoin-qt</code>:</p>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Why -qt?</div>
+<div class="paragraph">
+<p>The Bitcoin Core GUI is built using a GUI programming library called QT.
+Hence the name, <code>bitcoin-qt</code>.</p>
+</div>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli stop
+Bitcoin server stopping
+$ ./bitcoin-qt &amp;</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If <code>bitcoind</code> didn’t have time to finish shutting down before you
+started <code>bitcoin-qt</code>, you’ll get an error message from <code>bitcoin-qt</code>. If
+so, click OK and try running <code>./bitcoin-qt &amp;</code> again in a few seconds.</p>
+</div>
+<div class="paragraph">
+<p><code>bitcoin-qt</code> uses the same data directory, ~/.bitcoin/, as <code>bitcoind</code>,
+which means <code>bitcoin-qt</code> will use the already downloaded and verified
+blockchain and the same wallet as <code>bitcoind</code>. It’s just the user
+interface that differs.</p>
+</div>
+<div class="paragraph">
+<p>By default, <code>bitcoin-qt</code> won’t start the web server to accept JSON-RPC
+requests as <code>bitcoind</code> does. To use <code>bitcoin-cli</code> with <code>bitcoin-qt</code>,
+start <code>bitcoin-qt</code> as follows, instead:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-qt -server &amp;</pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_getting_to_know_bitcoin_cli">A.3. Getting to know bitcoin-cli</h3>
+<div class="paragraph">
+<p>You’ve started Bitcoin Core in the background by running</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre> $ ./bitcoind -daemon</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The most important command to know is the <code>help</code> command. Run it without
+any arguments to get a list of all available commands:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli help</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You’ll get a long list of commands grouped by subject—for example,
+<code>Blockchain</code>, <code>Mining</code>, and <code>Wallet</code>. Some commands are
+self-explanatory, but if you want to know more about a specific command,
+you can run <code>help</code> with the command name as an argument. For example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli help getblockhash
+getblockhash height
+
+Returns hash of block in best-block-chain at height provided.
+
+Arguments:
+1. height         (numeric, required) The height index
+
+Result:
+"hash"         (string) The block hash
+
+Examples:
+&gt; bitcoin-cli getblockhash 1000
+&gt; curl --user myusername --data-binary '{"jsonrpc": "1.0", "id":"curltest", "method": "getblockhash", "params": [1000] }' -H 'content-type: text/plain;' http://127.0.0.1:8332/</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can invoke <code>bitcoin-cli</code> in two ways:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><em>Using positional arguments</em>—The meanings of the arguments are based
+on their relative positions: for example, <code>./bitcoin-cli getblockhash
+1000</code>. This is the most common way to use <code>bitcoin-cli.</code></p>
+</li>
+<li>
+<p><em>Using named arguments</em>—The arguments are named on the command line:
+for example, <code>./bitcoin-cli -named getblockhash height=1000</code>. This is
+sometimes useful when the command takes optional arguments and you
+want to specify the second optional argument but not the first. You’ll
+see examples later.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_getting_to_work">A.4. Getting to work</h3>
+<div class="paragraph">
+<p>Let’s create an encrypted wallet and back it up. You’ll then receive
+some bitcoins and pass that money on to another address while dissecting
+the transactions for details—all using <code>bitcoin-cli</code>.</p>
+</div>
+<div class="sect3">
+<h4 id="_creating_an_encrypted_wallet">A.4.1. Creating an encrypted wallet</h4>
+<div class="paragraph">
+<p>When <code>bitcoind</code> (or <code>bitcoin-qt</code>) starts, it will automatically create a
+wallet for you and store it in the file ~/.bitcoin/wallet.dat. But this
+wallet isn’t encrypted, which means its private keys and its seed, used
+to derive key pairs as discussed in <a href="#ch04">[ch04]</a>, are stored in the clear
+on your hard drive. Let’s look at some data for such a wallet:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli getwalletinfo
+{
+  "walletname": "",
+  "walletversion": 169900,
+  "balance": 0.00000000,
+  "unconfirmed_balance": 0.00000000,
+  "immature_balance": 0.00000000,
+  "txcount": 0,
+  "keypoololdest": 1541941001,
+  "keypoolsize": 1000,
+  "keypoolsize_hd_internal": 1000,
+  "paytxfee": 0.00000000,
+  "hdseedid": "bb989ad4e23f7bb713eab0a272eaef3d4857f5e3",
+  "hdmasterkeyid": "bb989ad4e23f7bb713eab0a272eaef3d4857f5e3",
+  "private_keys_enabled": true
+}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The output from the <code>getwalletinfo</code> command shows various information
+about the wallet currently being used. This automatically created wallet
+is unnamed, which is why <code>walletname</code> is empty.</p>
+</div>
+<div class="paragraph">
+<p><code>balance</code> is how many confirmed bitcoins you have (including unconfirmed
+outgoing transactions), and <code>unconfirmed_balance</code> is the sum of incoming
+unconfirmed payments. <code>immature_balance</code> is relevant only for miners and
+denotes the number of newly created bitcoins, which can’t be spent until
+after 100 blocks passed. Refer to the help section on <code>getwalletinfo</code>
+for more details about the output.</p>
+</div>
+<div class="paragraph">
+<p>To create an encrypted wallet, you need to create a <em>new</em> wallet using
+the command <code>encryptwallet</code>:</p>
+</div>
+<div class="listingblock fullwidth">
+<div class="content">
+<pre>$ ./bitcoin-cli -stdin encryptwallet
+secretpassword&lt;ENTER&gt;
+&lt;CTRL-D&gt;
+wallet encrypted; Bitcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This command creates a new encrypted wallet. The <code>-stdin</code> option is used
+to read the password argument from standard input, which in this case
+means you type the password in your terminal window after starting the
+command. End your input by pressing Enter and Ctrl-D. The reason for
+using <code>-stdin</code> is that you don’t want the password to be written in the
+command itself, because most shell interpreters, such as bash, keep a
+history of commands in a file. The <code>-stdin</code> option ensures that the
+password doesn’t end up in any such history files.</p>
+</div>
+<div class="paragraph">
+<p>It’s important to create a new encrypted wallet instead of just
+encrypting the existing wallet, because the old wallet might already
+have been compromised on your hard drive. As noted by the output,
+<code>bitcoind</code> has stopped. Bitcoin Core can’t currently switch to a new
+wallet file while running.</p>
+</div>
+<div class="paragraph">
+<p>Let’s start <code>bitcoind</code> again and look at the wallet. You’ll see
+something similar to this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoind -daemon
+Bitcoin server starting
+$ ./bitcoin-cli getwalletinfo
+{
+  "walletname": "",
+  "walletversion": 169900,
+  "balance": 0.00000000,
+  "unconfirmed_balance": 0.00000000,
+  "immature_balance": 0.00000000,
+  "txcount": 0,
+  "keypoololdest": 1541941063,
+  "keypoolsize": 1000,
+  "keypoolsize_hd_internal": 1000,
+  "unlocked_until": 0,
+  "paytxfee": 0.00000000,
+  "hdseedid": "590ec0fa4cec43d9179e5b6f7b2cdefaa35ed282",
+  "hdmasterkeyid": "590ec0fa4cec43d9179e5b6f7b2cdefaa35ed282",
+  "private_keys_enabled": true
+}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Your old, unencrypted wallet.dat has been overwritten by the new,
+encrypted wallet.dat. For safety, however, your old seed is kept in the
+new encrypted wallet, in case you had actual funds in the old wallet or
+accidentally receive funds to that old wallet in the future. The
+<code>unlocked_until</code> value of <code>0</code> means your private keys are encrypted with
+the password you entered when you encrypted your wallet. From now on,
+you need to decrypt your private keys to access them. You’ll do that
+when you send bitcoin later.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_backing_up_the_wallet">A.4.2. Backing up the wallet</h4>
+<div class="paragraph">
+<p>You’ve created an encrypted wallet, and before you start using it, you
+need to back it up. In <a href="#ch04">[ch04]</a>, we talked about mnemonic sentences, as
+defined in BIP39, which made backing up hierarchical deterministic (HD)
+wallet seeds simple. But this feature is <em>not</em> implemented in Bitcoin
+Core, for a few reasons—mainly, that the mnemonic sentence lacks
+information about the following:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The version of the seed format.</p>
+</li>
+<li>
+<p>The <em>birthday</em>, which is when the seed was created. Without a
+birthday, you have to scan the entire blockchain to find your old
+transactions. With a birthday, you only have to scan the blockchain from
+the birthday onward.</p>
+</li>
+<li>
+<p>The derivation paths to use for restoration. This is somewhat remedied
+by using standard derivation paths, but not all wallets implement the
+standard.</p>
+</li>
+<li>
+<p>Other arbitrary metadata, such as labels on addresses.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>To back up your Bitcoin Core wallet, you need to make a copy of the
+wallet.dat file. Be careful not to copy the file using your operating
+system’s copy facilities while <code>bitcoind</code> or <code>bitcoin-qt</code> is running. If
+you do this, your backup might be in an inconsistent state because
+<code>bitcoind</code> might be writing data to it while you copy. To make sure you
+get a consistent copy of the file while Bitcoin Core is running, run the
+following command:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli backupwallet ~/walletbackup.dat</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This will instruct <code>bitcoind</code> to save a copy of the wallet file to
+walletbackup.dat in your home directory (you can change the name and
+path of the file to anything you like). The backup file will be an exact
+copy of the original wallet.dat file. Move the walletbackup.dat file to
+a safe place—for example, a USB memory stick in a bank safe-deposit box
+or on a computer at your brother’s apartment.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_receiving_money">A.4.3. Receiving money</h4>
+<div class="paragraph">
+<p>You’ve created an encrypted, backed-up wallet. Great! Let’s put some
+bitcoins into it. To do this, you need a Bitcoin address to receive the
+bitcoins to, so let’s get one:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli -named getnewaddress address_type=bech32
+bc1q2r9mql4mkz3z7yfxvef76yxjd637r429620j75</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This command creates a bech32 p2wpkh address for you. If you prefer
+another type of address, you can change <code>bech32</code> to <code>legacy</code> to get a
+p2pkh address or to <code>p2sh-segwit</code> to get a p2wpkh nested in p2sh
+address. Head back to the <a href="#recap-of-payment-types">[recap-of-payment-types]</a> to refresh your
+memory on the different payment and address types.</p>
+</div>
+<div class="paragraph">
+<p>Now, let’s send bitcoin to that address. Be careful not to send money to
+the address printed in this book (although I’ll happily accept it), but
+rather to an address you generate yourself with your own full node
+wallet.</p>
+</div>
+<div class="paragraph">
+<p>This raises the question of how to get bitcoins to send to your
+wallet. You can get bitcoins in several ways:</p>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">On the web</div>
+<div class="paragraph">
+<p>Visit <a href="#web-getting-started">[web-getting-started]</a> to find out more about how to get
+bitcoins where you live.</p>
+</div>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Buy bitcoins on an exchange.</p>
+</li>
+<li>
+<p>Ask friends who have bitcoins if they can give or sell you some.</p>
+</li>
+<li>
+<p>Earn bitcoins as payment for your labor.</p>
+</li>
+<li>
+<p>Mine bitcoins.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>I’ll leave it up to you how you obtain bitcoins and assume that you
+somehow will get bitcoins into the address you created previously.</p>
+</div>
+<div class="paragraph">
+<p>I made a payment to my new address and then checked my wallet:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli getunconfirmedbalance
+0.00500000</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This shows a pending incoming payment of 5 mBTC (0.005 BTC). I now have
+to wait until it’s confirmed in the blockchain. Meanwhile, you can dig
+into the transaction by running the <code>listtransactions</code> command. Here are
+my results:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli listtransactions
+[
+  {
+    "address": "bc1q2r9mql4mkz3z7yfxvef76yxjd637r429620j75",
+    "category": "receive",
+    "amount": 0.00500000,
+    "label": "",
+    "vout": 1,
+    "confirmations": 0,
+    "trusted": false,
+    "txid": "ebfd0d14c2ea74ce408d01d5ea79636b8dee88fe06625f5d4842d2a0ba45c195",
+    "walletconflicts": [
+    ],
+    "time": 1541941483,
+    "timereceived": 1541941483,
+    "bip125-replaceable": "yes"
+  }
+]</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This transaction has 0 confirmations and pays 0.005 BTC. You can also
+see that this transaction’s txid is <code>ebfd0d14…ba45c195</code>.</p>
+</div>
+<div class="paragraph">
+<p>Let’s take a closer look at the transaction using the command
+<code>getrawtransaction</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli getrawtransaction \
+    ebfd0d14c2ea74ce408d01d5ea79636b8dee88fe06625f5d4842d2a0ba45c195 1
+{
+  "txid": "ebfd0d14c2ea74ce408d01d5ea79636b8dee88fe06625f5d4842d2a0ba45c195",
+  "hash": "ebfd0d14c2ea74ce408d01d5ea79636b8dee88fe06625f5d4842d2a0ba45c195",
+  "version": 1,
+  "size": 223,
+  "vsize": 223,
+  "weight": 892,
+  "locktime": 549655,
+  "vin": [
+    {
+      "txid": "8a4023dbcf57dc7f51d368606055e47636fc625a512d3481352a1eec909ab22f",
+      "vout": 0,
+      "scriptSig": {
+        "asm": "3045022100cc095e6b7c0d4c42a1741371cfdda4f1b518590f1af0915578d3966fee7e34ea02205fc1e976edcf4fe62f16035a5389c661844f7189a9eb45adf59e061ac8cc6fd3[ALL] 030ace35cc192cedfe2a730244945f1699ea2f6b7ee77c65c83a2d7a37440e3dae",
+        "hex": "483045022100cc095e6b7c0d4c42a1741371cfdda4f1b518590f1af0915578d3966fee7e34ea02205fc1e976edcf4fe62f16035a5389c661844f7189a9eb45adf59e061ac8cc6fd30121030ace35cc192cedfe2a730244945f1699ea2f6b7ee77c65c83a2d7a37440e3dae"
+      },
+      "sequence": 4294967293
+    }
+  ],
+  "vout": [
+    {
+      "value": 0.00313955,
+      "n": 0,
+      "scriptPubKey": {
+        "asm": "OP_DUP OP_HASH160 6da68d8f89dced72d4339959c94a4fcc872fa089 OP_EQUALVERIFY OP_CHECKSIG",
+        "hex": "76a9146da68d8f89dced72d4339959c94a4fcc872fa08988ac",
+        "reqSigs": 1,
+        "type": "pubkeyhash",
+        "addresses": [
+          "1AznBDM2ZfjYNoRw3DLSR9NL2cwwqDHJY6"
+        ]
+      }
+    },
+    {
+      "value": 0.00500000,
+      "n": 1,
+      "scriptPubKey": {
+        "asm": "0 50cbb07ebbb0a22f11266653ed10d26ea3e1d545",
+        "hex": "001450cbb07ebbb0a22f11266653ed10d26ea3e1d545",
+        "reqSigs": 1,
+        "type": "witness_v0_keyhash",
+        "addresses": [
+          "bc1q2r9mql4mkz3z7yfxvef76yxjd637r429620j75"
+        ]
+      }
+    }
+  ],
+  "hex": "01000000012fb29a90ec1e2a3581342d515a62fc3676e455606068d3517fdc57cfdb23408a000000006b483045022100cc095e6b7c0d4c42a1741371cfdda4f1b518590f1af0915578d3966fee7e34ea02205fc1e976edcf4fe62f16035a5389c661844f7189a9eb45adf59e061ac8cc6fd30121030ace35cc192cedfe2a730244945f1699ea2f6b7ee77c65c83a2d7a37440e3daefdffffff0263ca0400000000001976a9146da68d8f89dced72d4339959c94a4fcc872fa08988ac20a107000000000016001450cbb07ebbb0a22f11266653ed10d26ea3e1d54517630800"
+}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This command prints the entire transaction in a human-readable (well, at
+least developer-readable) form. Let’s start from the top and go through
+the most relevant parts of this transaction. The <code>txid</code> is the
+transaction id. The <code>hash</code> is the double SHA256 hash of the whole
+transaction, including the witness. For non-segwit transactions, <code>hash</code>
+is equal to <code>txid</code>.</p>
+</div>
+<div class="paragraph">
+<p>The <code>size</code> of the transaction is 223 bytes, and <code>vsize</code> (the virtual
+size) is also 223 vbytes; <code>vsize</code> is the transaction’s number of weight
+units (<code>892</code>) divided by 4, so the virtual size of a non-segwit
+transaction (which this is, because it only spends non-segwit outputs)
+is equal to its actual <code>size</code>.</p>
+</div>
+<div class="paragraph">
+<p>The locktime of this transaction is set to <code>549655</code>, which was the
+height of the strongest chain at the time of the transaction’s creation.
+Thus the transaction can’t be mined until block height 549656. This
+reduces the attractiveness of an attack in which a miner deliberately
+tries to reorg the blockchain and include the transaction into a block
+height that’s already been mined.</p>
+</div>
+<div class="paragraph">
+<p>Next comes the list of inputs. This transaction has a single input that
+spends output at index <code>0</code> (<code>vout</code>) of the transaction with <code>txid</code>
+<code>8a4023db…909ab22f</code>. The input spends a p2pkh output.</p>
+</div>
+<div class="paragraph">
+<p>The input’s sequence number is <code>4294967293</code>, which is <code>fffffffd</code> in hex
+code. This means the lock time is enabled (≤<code>fffffffe</code>) and the
+transaction is replaceable (≤<code>fffffffd</code>) according to BIP125. The
+meaning of the sequence number was summarized in <a href="#tab0901">[tab0901]</a>.</p>
+</div>
+<div class="paragraph">
+<p>After the list of inputs comes the list of transaction outputs. This
+transaction has a list of two outputs. The first pays 0.00313955 BTC to
+a p2pkh address you haven’t seen before. This is <em>probably</em> a change
+output. The second output sends 0.005 BTC to the p2wpkh address created
+earlier.</p>
+</div>
+<div class="paragraph">
+<p>Let’s see if the transaction is confirmed yet. You can check, for
+example, with <code>getbalance</code>. In my case, if it shows <code>0.00500000</code>, then
+the transaction has confirmed:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli getbalance
+0.00500000</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Cool, the money is confirmed! Let’s move on.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_sending_money">A.4.4. Sending money</h4>
+<div class="paragraph">
+<p>You’ve received some bitcoins. Now, you want to send bitcoins to someone
+else. To send bitcoins, you can use the <code>sendtoaddress</code> command. You
+need to make a few decisions first:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Address to send to</p>
+</li>
+<li>
+<p>How much money to send: 0.001 BTC</p>
+</li>
+<li>
+<p>How urgent the transaction is: not urgent (you’ll be happy if it
+confirms within 20 blocks)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>I’ll send the bitcoins to address <code>bc1qu456…5t7uulqm</code>, but you should
+get another address to send to. If you have no other wallet, you can
+create a new address in Bitcoin Core to send to just for experimental
+purposes. I’ve obfuscated my address below so that you don’t send to my
+address by mistake.</p>
+</div>
+<div class="listingblock fullwidth">
+<div class="content">
+<pre>$ ./bitcoin-cli -named sendtoaddress \
+    address="bc1qu456w7a5mawlgXXXXXXu03wp8wc7d65t7uulqm" \
+    amount=0.001 conf_target=20 estimate_mode=ECONOMICAL
+error code: -13
+error message:
+Error: Please enter the wallet passphrase with walletpassphrase first.</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Oh, dear! An error. As indicated by the error message, the private keys
+are encrypted in the wallet.dat file. Bitcoin Core needs the private
+keys to sign the transaction. To make the private keys accessible, you
+need to decrypt them. You do this using the <code>walletpassphrase</code> command
+with the <code>-stdin</code> option to prevent the passphrase from being stored by
+your command-line interpreter, such as bash:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli -stdin walletpassphrase
+secretpassword&lt;ENTER&gt;
+300&lt;ENTER&gt;
+&lt;CTRL-D&gt;</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The last argument, <code>300</code>, is the number of seconds you should keep the
+wallet unlocked. After 300 seconds, the wallet will be automatically
+locked again in case you forget to lock it manually. Let’s retry the
+<code>sendtoaddress</code> command:</p>
+</div>
+<div class="listingblock fullwidth">
+<div class="content">
+<pre>$ ./bitcoin-cli -named sendtoaddress \
+    address="bc1qu456w7a5mawlgXXXXXXu03wp8wc7d65t7uulqm" \
+    amount=0.001 conf_target=20 estimate_mode=ECONOMICAL
+a13bcb16d8f41851cab8e939c017f1e05cc3e2a3c7735bf72f3dc5ef4a5893a2</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The command output a txid for the newly created transaction. This means
+it went well. You can relock the wallet using the <code>walletlock</code> command:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli walletlock</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The wallet is now locked. I’ll list my transactions again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli listtransactions
+[
+  {
+    "address": "bc1q2r9mql4mkz3z7yfxvef76yxjd637r429620j75",
+    "category": "receive",
+    "amount": 0.00500000,
+    "label": "",
+    "vout": 1,
+    "confirmations": 1,
+    "blockhash": "000000000000000000240eec03ac7499805b0f3df34a7d5005670f3a8fa836ca",
+    "blockindex": 311,
+    "blocktime": 1541946325,
+    "txid": "ebfd0d14c2ea74ce408d01d5ea79636b8dee88fe06625f5d4842d2a0ba45c195",
+    "walletconflicts": [
+    ],
+    "time": 1541941483,
+    "timereceived": 1541941483,
+    "bip125-replaceable": "no"
+  },
+  {
+    "address": "bc1qu456w7a5mawlg35y00xu03wp8wc7d65t7uulqm",
+    "category": "send",
+    "amount": -0.00100000,
+    "vout": 1,
+    "fee": -0.00000141,
+    "confirmations": 0,
+    "trusted": true,
+    "txid": "a13bcb16d8f41851cab8e939c017f1e05cc3e2a3c7735bf72f3dc5ef4a5893a2",
+    "walletconflicts": [
+    ],
+    "time": 1541946631,
+    "timereceived": 1541946631,
+    "bip125-replaceable": "no",
+    "abandoned": false
+  }
+]</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The new transaction is the last one of the two. It isn’t yet confirmed,
+as indicated by <code>"confirmations": 0</code>. The fee paid was 141 satoshis.
+Let’s look into this transaction in detail:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli getrawtransaction \
+    a13bcb16d8f41851cab8e939c017f1e05cc3e2a3c7735bf72f3dc5ef4a5893a2 1
+{
+  "txid": "a13bcb16d8f41851cab8e939c017f1e05cc3e2a3c7735bf72f3dc5ef4a5893a2",
+  "hash": "554a3a3e57dcd07185414d981af5fd272515d7f2159cf9ed9808d52b7d852ead",
+  "version": 2,
+  "size": 222,
+  "vsize": 141,
+  "weight": 561,
+  "locktime": 549665,
+  "vin": [
+    {
+      "txid": "ebfd0d14c2ea74ce408d01d5ea79636b8dee88fe06625f5d4842d2a0ba45c195",
+      "vout": 1,
+      "scriptSig": {
+        "asm": "",
+        "hex": ""
+      },
+      "txinwitness": [
+        "30440220212043afeaf70a97ea0aa09a15749ab94e09c6fad427677610286666a3decf0b022076818b2b2dc64b1599fd6b39bb8c249efbf4c546e334bcd7e1874115da4dfd0c01",
+        "020127d82280a939add393ddbb1b8d08f0371fffbde776874cd69740b59e098866"
+      ],
+      "sequence": 4294967294
+    }
+  ],
+  "vout": [
+    {
+      "value": 0.00399859,
+      "n": 0,
+      "scriptPubKey": {
+        "asm": "0 4bf041f271bd94385d6bcac8487adf6c9a862d10",
+        "hex": "00144bf041f271bd94385d6bcac8487adf6c9a862d10",
+        "reqSigs": 1,
+        "type": "witness_v0_keyhash",
+        "addresses": [
+          "bc1qf0cyrun3hk2rshttetyys7kldjdgvtgs6ymhzz"
+        ]
+      }
+    },
+    {
+      "value": 0.00100000,
+      "n": 1,
+      "scriptPubKey": {
+        "asm": "0 e569a77bb4df5df446847bcdc7c5c13bb1e6ea8b",
+        "hex": "0014e569a77bb4df5df446847bcdc7c5c13bb1e6ea8b",
+        "reqSigs": 1,
+        "type": "witness_v0_keyhash",
+        "addresses": [
+          "bc1qu456w7a5mawlg35y00xu03wp8wc7d65t7uulqm"
+        ]
+      }
+    }
+  ],
+  "hex": "0200000000010195c145baa0d242485d5f6206fe88ee8d6b6379ead5018d40ce74eac2140dfdeb0100000000feffffff02f3190600000000001600144bf041f271bd94385d6bcac8487adf6c9a862d10a086010000000000160014e569a77bb4df5df446847bcdc7c5c13bb1e6ea8b024730440220212043afeaf70a97ea0aa09a15749ab94e09c6fad427677610286666a3decf0b022076818b2b2dc64b1599fd6b39bb8c249efbf4c546e334bcd7e1874115da4dfd0c0121020127d82280a939add393ddbb1b8d08f0371fffbde776874cd69740b59e09886621630800"
+}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The first thing to note is that <code>txid</code> and <code>hash</code> differ. That’s because
+this is a segwit transaction. As you may recall from <a href="#ch10">[ch10]</a>, the
+witness isn’t included in the txid—that’s how you avoid transaction
+malleability—but the <code>hash</code> in the output includes it. Note that <code>size</code>
+and <code>vsize</code> differ, too, which is expected from a segwit transaction.
+The fee was 141 satoshis, as shown by the <code>listtransactions</code> command,
+and the <code>vsize</code> was 141 vbytes. The fee rate was thus selected by
+Bitcoin Core to be 1 sat/vbyte.</p>
+</div>
+<div class="paragraph">
+<p>The transaction has a single input that spends output <code>1</code> of transaction
+<code>ebfd0d14…ba45c195</code>. You should recognize this output from the section
+where I paid 0.005 BTC to my Bitcoin Core wallet. Because that output
+was a p2wpkh output, the signature script (<code>scriptSig</code>) is empty, and
+the <code>txinwitness</code> contains the signature and pubkey.</p>
+</div>
+<div class="paragraph">
+<p>The sequence number of the input is 4294967294, which equals <code>fffffffe</code>.
+This means the transaction has lock time enabled but isn’t replaceable
+using BIP125 (opt-in replace-by-fee).</p>
+</div>
+<div class="paragraph">
+<p>I have two outputs. The first is the change of 0.00399859 BTC back to an
+address I own. The other is the actual payment of 0.001 BTC. Let’s check
+the balance again:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre> ./bitcoin-cli getbalance
+0.00399859</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Yep, there it is. I didn’t have to wait for confirmation to see the
+new balance, because <code>getbalance</code> always includes my own <em>outgoing</em>
+unconfirmed transactions. I’ve spent my only UTXO (of 0.005 BTC) and
+created a new UTXO of 0.00399859 to myself:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>Spent:   0.005
+Pay:    -0.001
+Fee:    -0.00000141
+===================
+Change:  0.00399859</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It sums up perfectly.</p>
+</div>
+<div class="paragraph">
+<p>I’ve shown a few commands you can use to wing your Bitcoin Core node,
+but there’s a lot more to it. Explore <code>./bitcoin-cli help</code> to find out
+more.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2021-05-19 10:45:14 +0200
+</div>
+</div>
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  messageStyle: "none",
+  tex2jax: {
+    inlineMath: [["\\(", "\\)"]],
+    displayMath: [["\\[", "\\]"]],
+    ignoreClass: "nostem|nolatexmath"
+  },
+  asciimath2jax: {
+    delimiters: [["\\$", "\\$"]],
+    ignoreClass: "nostem|noasciimath"
+  },
+  TeX: { equationNumbers: { autoNumber: "none" } }
+})
+MathJax.Hub.Register.StartupHook("AsciiMath Jax Ready", function () {
+  MathJax.InputJax.AsciiMath.postfilterHooks.Add(function (data, node) {
+    if ((node = data.script.parentNode) && (node = node.parentNode) && node.classList.contains("stemblock")) {
+      data.math.root.display = "block"
+    }
+    return data
+  })
+})
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_HTMLorMML"></script>
+</body>
+</html>

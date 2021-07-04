@@ -1,0 +1,123 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="style/asciidoctor.css">
+    <link rel="stylesheet" href="style/grokking-bitcoin.css">
+  </head>
+  <body>
+
+    <img src="images/fm/cover-small.png"/>
+
+    <h2>About this version</h2>
+    <p>This is an html version of the Mannning book "Grokking
+      Bitcoin", generated from the source code available
+      at <a href="https://github.com/kallerosenbaum/grokkingbitcoin">GitHub</a>. I
+      make it available here because I think it can be a useful
+      resource. Use as you please (non-commercially, see "License"
+      below), but I do encourage you to buy the beautifully typeset
+      version of the book from</p>
+    <ul>
+      <li>
+	<a href="https://www.manning.com/books/grokking-bitcoin">Manning's
+	  website</a>
+      </li>
+      <li>	
+	<a href="https://www.amazon.com/Grokking-Bitcoin-Kalle-Rosenbaum/dp/1617294640">Amazon</a>
+      </li>
+    </ul>
+    <p>This will give you a much better reading experience while
+    suppporting me and Manning's tireless work in creating this book.</p>
+
+    <p>I make no guarantees that this html version will be kept
+      up-to-date with the git repository.</p>
+
+    <p>Enjoy!</p>
+
+    <h2>Donate</h2>
+    
+    <p>If you prefer to read the open source version, please consider
+    donating below. Any amount is much appreciated.</p>
+
+<style type="text/css"> .btcpay-form { display: inline-flex; align-items: center; justify-content: center; } .btcpay-form--inline { flex-direction: row; } .btcpay-form--block { flex-direction: column; } .btcpay-form--inline .submit { margin-left: 15px; } .btcpay-form--block select { margin-bottom: 10px; } .btcpay-form .btcpay-custom-container{ text-align: center; }.btcpay-custom { display: flex; align-items: center; justify-content: center; } .btcpay-form .plus-minus { cursor:pointer; font-size:25px; line-height: 25px; background: #DFE0E1; height: 30px; width: 45px; border:none; border-radius: 60px; margin: auto 5px; display: inline-flex; justify-content: center; } .btcpay-form select { -moz-appearance: none; -webkit-appearance: none; appearance: none; color: currentColor; background: transparent; border:1px solid transparent; display: block; padding: 1px; margin-left: auto; margin-right: auto; font-size: 11px; cursor: pointer; } .btcpay-form select:hover { border-color: #ccc; } #btcpay-input-price { -moz-appearance: none; -webkit-appearance: none; border: none; box-shadow: none; text-align: center; font-size: 25px; margin: auto; border-radius: 5px; line-height: 35px; background: #fff; } #btcpay-input-price::-webkit-outer-spin-button, #btcpay-input-price::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; } </style>
+<form method="POST"  action="https://love.rosenbaum.se/api/v1/invoices" class="btcpay-form btcpay-form--block">
+  <input type="hidden" name="storeId" value="8FTM7vNex3pHoSoBPeMDBKEUX7pTpZ5wUpkiKoSMz5EV" />
+  <div class="btcpay-custom-container">
+    <div class="btcpay-custom">
+      <button class="plus-minus" onclick="event.preventDefault(); var price = parseInt(document.querySelector('#btcpay-input-price').value); if ('-' == '-' && (price - 1) < 1) { return; } document.querySelector('#btcpay-input-price').value = parseInt(document.querySelector('#btcpay-input-price').value) - 1;">-</button>
+      <input id="btcpay-input-price" name="price" type="text" min="1" max="2000" step="1" value="10" style="width: 3em;" oninput="event.preventDefault();isNaN(event.target.value) || event.target.value <= 0 ? document.querySelector('#btcpay-input-price').value = 10 : event.target.value"  />
+      <button class="plus-minus" onclick="event.preventDefault(); var price = parseInt(document.querySelector('#btcpay-input-price').value); if ('+' == '-' && (price - 1) < 1) { return; } document.querySelector('#btcpay-input-price').value = parseInt(document.querySelector('#btcpay-input-price').value) + 1;">+</button>
+    </div>
+    <select name="currency">
+      <option value="USD" selected>USD</option>
+      <option value="GBP">GBP</option>
+      <option value="EUR">EUR</option>
+      <option value="BTC">BTC</option>
+    </select>
+  </div>
+  <input type="image" class="submit" name="submit" src="https://love.rosenbaum.se/img/paybutton/pay.svg" style="width:209px" alt="Pay with BtcPay, Self-Hosted Bitcoin Payment Processor">
+</form>
+
+    <h2>License</h2>
+
+    <p>This work is licensed under the Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) license. Full license text can be read at <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode">https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode</a>.</p>
+
+    <p>Copyright 2019 by Manning Publications Co. All rights reserved.</p>
+    
+    <h2>Full book</h2>
+    
+    <p>This is the full book in a single html page. It's HUGE, &gt;
+    130 MB, so it will take a very long time to load. But once loaded,
+    it's a great resource for searching.</p>
+    
+    <a href="grokking-bitcoin.html">Full book (HUGE &gt;130 MB)</a>
+    
+    <h2>Individual chapters</h2>
+    
+    <ul>
+      <li>
+	<a href="grokking-bitcoin-fm.html">Front matter</a>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-1.html">Chapter 1</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-2.html">Chapter 2</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-3.html">Chapter 3</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-4.html">Chapter 4</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-5.html">Chapter 5</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-6.html">Chapter 6</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-7.html">Chapter 7</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-8.html">Chapter 8</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-9.html">Chapter 9</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-10.html">Chapter 10</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-11.html">Chapter 11</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-app1.html">Appendix A</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-app2.html">Appendix B</a><br/>
+      </li>
+      <li>
+	<a href="grokking-bitcoin-app3.html">Appendix C</a><br/>
+      </li>
+    </ul>
+  </body>
+</html>

@@ -1,0 +1,2040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 2.0.15">
+<meta name="author" content="Kalle Rosenbaum">
+<title>Grokking Bitcoin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="style/asciidoctor.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="style/grokking-bitcoin.css">
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  messageStyle: "none",
+  tex2jax: {
+    inlineMath: [["\\(", "\\)"]],
+    displayMath: [["\\[", "\\]"]],
+    ignoreClass: "nostem|nolatexmath"
+  },
+  asciimath2jax: {
+    delimiters: [["\\$", "\\$"]],
+    ignoreClass: "nostem|noasciimath"
+  },
+  TeX: { equationNumbers: { autoNumber: "none" } }
+});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_HTMLorMML"></script>
+</head>
+<body class="book toc2 toc-left">
+<div id="header">
+<h1>Grokking Bitcoin</h1>
+<div class="details">
+<span id="author" class="author">Kalle Rosenbaum</span><br>
+</div>
+<div id="toc" class="toc2">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#ch10">10. Segregated witness</a>
+<ul class="sectlevel2">
+<li><a href="#_problems_solved_by_segwit">10.1. Problems solved by segwit</a>
+<ul class="sectlevel3">
+<li><a href="#_transaction_malleability">10.1.1. Transaction malleability</a></li>
+<li><a href="#inefficient-sighash">10.1.2. Inefficient signature verification</a></li>
+<li><a href="#_waste_of_bandwidth">10.1.3. Waste of bandwidth</a></li>
+<li><a href="#_script_upgrades_are_hard">10.1.4. Script upgrades are hard</a></li>
+</ul>
+</li>
+<li><a href="#_solutions">10.2. Solutions</a>
+<ul class="sectlevel3">
+<li><a href="#_segwit_addresses">10.2.1. Segwit addresses</a></li>
+<li><a href="#_spending_your_segwit_output">10.2.2. Spending your segwit output</a></li>
+<li><a href="#_verifying_the_segwit_transaction">10.2.3. Verifying the segwit transaction</a></li>
+<li><a href="#_including_your_segwit_transaction_in_a_block">10.2.4. Including your segwit transaction in a block</a></li>
+<li><a href="#_pay_to_witness_script_hash">10.2.5. Pay-to-witness-script-hash</a></li>
+<li><a href="#new-hashing-algorithm">10.2.6. New hashing method for signatures</a></li>
+<li><a href="#_bandwidth_savings">10.2.7. Bandwidth savings</a></li>
+<li><a href="#_upgradable_script">10.2.8. Upgradable script</a></li>
+</ul>
+</li>
+<li><a href="#_wallet_compatibility">10.3. Wallet compatibility</a></li>
+<li><a href="#recap-of-payment-types">10.4. Recap of payment types</a></li>
+<li><a href="#_block_limits">10.5. Block limits</a>
+<ul class="sectlevel3">
+<li><a href="#block-size-limit">10.5.1. Block size limit</a></li>
+<li><a href="#_signature_operations_limit">10.5.2. Signature operations limit</a></li>
+<li><a href="#_increasing_the_limits">10.5.3. Increasing the limits</a></li>
+</ul>
+</li>
+<li><a href="#_recap">10.6. Recap</a>
+<ul class="sectlevel3">
+<li><a href="#_solutions_2">10.6.1. Solutions</a></li>
+</ul>
+</li>
+<li><a href="#_exercises">10.7. Exercises</a>
+<ul class="sectlevel3">
+<li><a href="#_warm_up">10.7.1. Warm up</a></li>
+<li><a href="#_dig_in">10.7.2. Dig in</a></li>
+</ul>
+</li>
+<li><a href="#_summary">10.8. Summary</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="ch10">10. Segregated witness</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This chapter covers</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Understanding Bitcoin’s problems</p>
+</li>
+<li>
+<p>Moving signatures out of transactions</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Bitcoin is far from perfect. It has several shortcomings that we
+should address. The first section of this chapter will explain some of
+these shortcomings. Among the most critical are <em>transaction
+malleability</em> and inefficiencies in signature verification. We’ve
+already mentioned transaction malleability in
+<a href="#time-locked-transactions">[time-locked-transactions]</a>—someone might change a transaction in
+subtle, but valid, ways while it’s being broadcast, which will cause
+its txid to change.</p>
+</div>
+<div class="paragraph">
+<p>A solution to these problems was presented at a 2015 conference on
+Bitcoin scaling. This solution is known as <em>segregated witness</em>
+(segwit), which is a weird name for moving signature data out of
+transactions. I’ll describe this solution in detail: it includes
+changes in pretty much all parts of Bitcoin, including Bitcoin
+addresses, transaction format, block format, local storage, and
+network protocol.</p>
+</div>
+<div class="paragraph">
+<p>Because segwit was a pretty big change in Bitcoin, it wasn’t trivial
+to deploy without disrupting the network. It was carefully designed so
+old software would continue working and accepting segwit transactions
+and blocks, although without verifying certain parts of them.</p>
+</div>
+<div class="sect2">
+<h3 id="_problems_solved_by_segwit">10.1. Problems solved by segwit</h3>
+<div class="paragraph">
+<p>In this section, we’ll discuss the problems that segwit will solve.</p>
+</div>
+<div class="sect3">
+<h4 id="_transaction_malleability">10.1.1. Transaction malleability</h4>
+<div class="paragraph">
+<p>To explain transaction malleability, let’s go back to the example in
+<a href="#ch09">[ch09]</a> in which you gave a time-locked transaction to your daughter.
+When almost a year has passed since you created your time-locked
+transaction, you need to invalidate that transaction and create a new
+time-locked transaction, as <a href="#fig1001">Figure 1</a> shows.</p>
+</div>
+<div id="fig1001" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-01.svg" alt="10 01" width="100%">
+</div>
+<div class="title">Figure 1. You spend one of the outputs that the previous time-locked transaction spends and create a new time-locked transaction that you give to your daughter.</div>
+</div>
+<div class="paragraph">
+<p>It’s important to give the new time-locked transaction, Tx<sub>3</sub>, to your
+daughter before broadcasting Tx<sub>2</sub>, which invalidates the previous
+time-locked transaction, Tx<sub>1</sub>. Otherwise, if you do it the other way
+around and get hit by a bus between the two steps, your daughter won’t
+be able to claim the money.</p>
+</div>
+<div class="paragraph">
+<p>Suppose you do this correctly and first give Tx<sub>3</sub> to your daughter and
+then broadcast Tx<sub>2</sub>. Tx<sub>3</sub> spends the output of Tx<sub>2</sub>, which means
+Tx<sub>3</sub> contains the txid of Tx<sub>2</sub> in one of its inputs. Let’s see what
+might happen when you broadcast Tx<sub>2</sub> (<a href="#fig1002">Figure 2</a>).</p>
+</div>
+<div id="fig1002" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-02.svg" alt="10 02" width="75%">
+</div>
+<div class="title">Figure 2. Your transaction is being modified by Qi on its way through the network.</div>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Malleability</div>
+<div class="paragraph">
+<p>The word <em>malleate</em> means to form—for example, metal with a
+hammer. This term is used in cryptography to mean changing a signature
+without making it invalid or changing an encrypted message without
+making it totally garbled.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Qi wants to mess things up. When she receives your transaction Tx<sub>2</sub>,
+she modifies it in a certain way into Tx<sub>2M</sub>, so Tx<sub>2M</sub> is still
+valid and has the same effect as the original transaction, Tx<sub>2</sub>.
+(You’ll see shortly some different ways she can do this.) The result is
+that two different transactions now flow through the network that spend
+the same outputs and send the money to the same recipients with the same
+amounts—but they have <em>different txids</em>.</p>
+</div>
+<div class="paragraph">
+<p>Because Tx<sub>2</sub> and Tx<sub>2M</sub> spend the same outputs, they’re in conflict
+with each other, and at most one of them will be confirmed. Suppose
+Tx<sub>2M</sub> is the winner and gets mined in the next block. What happens to
+your daughter’s inheritance? See <a href="#fig1003">Figure 3</a>.</p>
+</div>
+<div id="fig1003" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-03.svg" alt="10 03" width="75%">
+</div>
+<div class="title">Figure 3. The inheritance fails because your daughter’s time-locked transaction is forever invalid due to transaction malleability.</div>
+</div>
+<div class="paragraph">
+<p>The <em>malleated</em> transaction, Tx<sub>2M</sub>, is stored in the blockchain. This
+makes Tx<sub>2</sub> invalid because it spends the same output as Tx<sub>2M</sub>. The
+first input of the time-locked transaction, Tx<sub>3</sub>, references Tx<sub>2</sub>
+using its txid, so when 30 April 2020 has passed, your daughter won’t be
+able to claim her inheritance: she’ll be trying to spend an output from
+an invalid transaction.</p>
+</div>
+<div class="sect4">
+<h5 id="_how_can_qi_change_the_txid">How can Qi change the txid?</h5>
+<div class="paragraph">
+<p>Qi has several options for changing the transaction without invalidating
+it. They all involve changing the signature script in one way or
+another. <a href="#fig1004">Figure 4</a> shows three classes of transaction malleability.</p>
+</div>
+<div id="fig1004" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-04.svg" alt="10 04" width="100%">
+</div>
+<div class="title">Figure 4. Three classes of transaction malleability</div>
+</div>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">BIP66</div>
+<div class="paragraph">
+<p>BIP66 fixes the first class of malleability issues.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>The first one modifies the signature container format, which changes how
+the signature is <em>encoded</em> in the signature script. You can encode the
+signature in a few different ways that are all valid. This issue was
+fixed in a system upgrade by using BIP66, which requires all signatures
+to be encoded in a specific way. The fix was activated in block 363724.</p>
+</div>
+<div class="paragraph">
+<p>The second way to malleate a transaction is to use cryptographic tricks.
+I won’t go into details here, but the signature, regardless of the
+container format, can be modified in a few ways that don’t make it
+invalid. Only one such trick is known, but we can’t rule out that there
+are others.</p>
+</div>
+<div class="paragraph">
+<p>The last approach is about changing the script program itself. You can
+do this in several ways. The one in <a href="#fig1004">Figure 4</a> first duplicates
+(<code>OP_DUP</code>) the top item on the stack and then immediately removes
+(<code>OP_DROP</code>) the duplicate from the stack; effectively, this change does
+nothing, and the whole program will run just fine.</p>
+</div>
+<div class="paragraph">
+<p>The second and third forms of transaction malleability are somewhat
+limited by <em>relay policies</em>. This means nodes will require that the
+signatures conform to specific rules and that no script operators except
+data pushes be present in the signature script. Otherwise, the node
+won’t relay the transaction. But nothing is stopping a miner from mining
+malleated transactions. Relay policies are implemented to make
+transaction malleability harder, but they can’t prevent it.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="inefficient-sighash">10.1.2. Inefficient signature verification</h4>
+<div class="paragraph">
+<p>When a transaction is signed, the signature algorithm hashes the
+transaction in a certain way.</p>
+</div>
+<div class="paragraph">
+<p>Remember from <a href="#sign-transaction">[sign-transaction]</a> that you clean all signature
+scripts before signing. But if you did <em>just</em> that, all the
+transaction’s signatures would use the exact same hash. If the
+transaction spent two different outputs that pay to the same address,
+the signature in one of the inputs could be reused in the other input.
+That property could be exploited by bad actors.</p>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Why not use a dummy byte?</div>
+<div class="paragraph">
+<p>Inserting the pubkey script into the signature script seems
+unnecessary.  It’d be simpler to add a single dummy byte in the
+signature script to avoid signature reuse. No one really knows why the
+pubkey script is used for this.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>To avoid this problem, Bitcoin makes each signature commit to a slightly
+different version of the transaction by copying the spent pubkey script
+into the signature script of the input that’s currently being signed.</p>
+</div>
+<div class="paragraph">
+<p>Let’s zoom in a bit on what’s happening. Suppose you want to sign a
+transaction with two inputs. The first input is signed as illustrated in
+<a href="#fig1005">Figure 5</a>.</p>
+</div>
+<div id="fig1005" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-05.svg" alt="10 05" width="75%">
+</div>
+<div class="title">Figure 5. Signing the first input. You prepare by copying the pubkey script to the signature script.</div>
+</div>
+<div class="paragraph">
+<p>The signature scripts of all inputs are empty, but you copy the pubkey
+script of the spent output and insert it into the signature script of
+the spending input. You then create the signature for the first input
+and move on to sign the second input (<a href="#fig1006">Figure 6</a>).</p>
+</div>
+<div id="fig1006" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-06.svg" alt="10 06" width="75%">
+</div>
+<div class="title">Figure 6. Signing the second input</div>
+</div>
+<div class="paragraph">
+<p>Here, all signature scripts except the second one are empty. The second
+signature script is populated with the spent output’s pubkey script. The
+signature is then created.</p>
+</div>
+<div class="paragraph">
+<p>By doing this exercise for each input, you ensure that signatures aren’t
+reusable across inputs if signed by the same private key. But this also
+introduces a problem: signature verification becomes inefficient.</p>
+</div>
+<div class="paragraph">
+<p>Suppose you want to verify the signatures of the aforementioned
+transaction. For every input, you need to perform basically the same
+procedure as when the transaction was signed: clean all the signature
+scripts from the transaction and then, one at a time, insert the pubkey
+script in the signature script of the input you want to verify. Then,
+verify the signature for that input.</p>
+</div>
+<div class="paragraph">
+<p>This might seem harmless, but as the number of inputs grows, the amount
+of data to hash for each signature increases. If you double the number
+of inputs, you roughly</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Double the number of signatures to verify</p>
+</li>
+<li>
+<p>Double the size of the transaction</p>
+</li>
+</ul>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Why 1 ms?</div>
+<div class="paragraph">
+<p>The 1 ms time is just an example. The actual time to verify a
+transaction varies among nodes.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>If the time to verify the transaction with two inputs in <a href="#fig1007">Figure 7</a>
+is 1 ms, it will take 4 ms to verify a transaction with four
+inputs. Double the number of inputs again, and you have 16 ms. A
+transaction with 1,024 inputs would take more than 4 minutes!</p>
+</div>
+<div id="fig1007" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-07.svg" alt="10 07" width="100%">
+</div>
+<div class="title">Figure 7. Total time for hashing during signature verification. Time roughly quadruples when the number of inputs doubles.</div>
+</div>
+<div class="paragraph">
+<p>This weakness can be exploited by creating a large transaction with a
+lot of inputs. All nodes verifying the transaction will be occupied for
+minutes, making them unable to verify other transactions and blocks
+during this time. The Bitcoin network as a whole would slow down.</p>
+</div>
+<div class="paragraph">
+<p>It would be much better if the transaction verification time grew
+linearly instead of quadratically: the time to verify a transaction
+would double as the number of inputs doubled. Then, the 1,024 inputs
+would take roughly 512 ms to verify instead of 4 minutes.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_waste_of_bandwidth">10.1.3. Waste of bandwidth</h4>
+<div class="paragraph">
+<p>When a full node sends a transaction to a lightweight wallet, it sends
+the complete transaction, which includes all signature data. But a
+lightweight wallet can’t verify the signatures because it doesn’t have
+the spent outputs.</p>
+</div>
+<div class="paragraph">
+<p>The signature scripts constitute a large percentage of the transaction
+size. A typical signature script spending a p2pkh output takes 107
+bytes. Consider a few different transactions with two outputs, as
+<a href="#tab1001">Table 1</a> shows.</p>
+</div>
+<table id="tab1001" class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 1. Space occupied by signature script data of different typical transactions</caption>
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 25%;">
+<col style="width: 25%;">
+<col style="width: 25%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Inputs</th>
+<th class="tableblock halign-left valign-top">Total signature script size (bytes)</th>
+<th class="tableblock halign-left valign-top">Tx size (bytes)</th>
+<th class="tableblock halign-left valign-top">Signature script percentage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">107</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">224</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">47%</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">214</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">373</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">57%</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">321</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">521</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">61%</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">8</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">856</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1255</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">68%</p></td>
+</tr>
+</tbody>
+</table>
+<div class="sidebarblock bigside">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/u10-01.svg" alt="u10 01">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Wouldn’t it be nice if a full node didn’t have to send the signature
+script data to the lightweight wallet? You’d probably save more than
+50% data traffic. There’s just one problem: such data is needed to
+calculate txids. If you skip sending signature scripts of
+transactions, the lightweight wallet won’t be able to verify that the
+transaction is included in a block because it can’t verify the merkle
+proof (<a href="#fig1008">Figure 8</a>).</p>
+</div>
+<div id="fig1008" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-08.svg" alt="10 08" width="75%">
+</div>
+<div class="title">Figure 8. Without the signature scripts, a lightweight wallet can’t verify that a transaction is included in the block.</div>
+</div>
+<div class="paragraph">
+<p>We’d definitely like to solve this somehow.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_script_upgrades_are_hard">10.1.4. Script upgrades are hard</h4>
+<div class="paragraph">
+<p>Sometimes, we want to extend the script language with new operations.
+For example, <code>OP_CHECKSEQUENCEVERIFY</code> (<code>OP_CSV</code>) and
+<code>OP_CHECKLOCKTIMEVERIFY</code> (<code>OP_CLTV</code>) were introduced in the language in
+2015 and 2016. Let’s look at how <code>OP_CLTV</code> was introduced.</p>
+</div>
+<div class="paragraph">
+<p>We’ll start with what <code>OP_</code> codes are. They’re nothing but a single
+byte. <code>OP_EQUAL</code> for example, is represented by the byte <code>87</code> in hex
+code. Every node knows that when it encounters byte <code>87</code> in the script
+program, it needs to compare the top two items on the stack and push the
+result back on the stack. <code>OP_CHECKMULTISIG</code> is also a single byte,
+<code>ae</code>. All operators are represented by different bytes.</p>
+</div>
+<div class="paragraph">
+<p>When Bitcoin was created, several NOP operators, <code>OP_NOP1</code>–<code>OP_NOP10</code>,
+were specified. These are represented by the bytes <code>b0</code>–<code>b9</code>. They’re
+designed to do nothing. The name NOP comes from No OPeration, which
+basically means, “When this instruction appears, ignore it and move on.”</p>
+</div>
+<div class="paragraph">
+<p>These NOPs can be used to extend the script language, but only to a
+certain extent. The <code>OP_CLTV</code> operator is actually <code>OP_NOP2</code>, or byte
+<code>b1</code>. <code>OP_CLTV</code> was introduced by releasing a version of Bitcoin Core
+that redefines how <code>OP_NOP2</code> works. But it needs to be done in a
+compatible way so we don’t break compatibility with old, non-upgraded
+nodes.</p>
+</div>
+<div class="paragraph">
+<p>Let’s go back to the example from <a href="#absolute-time-locked-outputs">[absolute-time-locked-outputs]</a>,
+where you gave your daughter an allowance in advance that she could
+cash out on 1 May (see <a href="#fig1009">Figure 9</a>).</p>
+</div>
+<div id="fig1009" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-09.svg" alt="10 09" width="50%">
+</div>
+<div class="title">Figure 9. Using <code>OP_CLTV</code> to lock an output until 1 May</div>
+</div>
+<div class="paragraph">
+<p>The pubkey script for this output is</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>&lt;may 1 2019 00:00:00&gt; OP_CHECKLOCKTIMEVERIFY OP_DROP
+OP_DUP OP_HASH160 &lt;PKH<sub>D</sub>&gt; OP_EQUALVERIFY OP_CHECKSIG</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This is how a new node—which is aware of the new meaning of byte
+<code>b1</code>—interprets the script. It will do the following:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Push the time <code>&lt;1 may 2019 00:00:00&gt;</code> to the stack.</p>
+</li>
+<li>
+<p>Check that the spending transaction’s lock time has at least the value
+found on top of the stack, or fail immediately otherwise.</p>
+</li>
+<li>
+<p>Drop the time value from the stack.</p>
+</li>
+<li>
+<p>Continue with normal signature verification.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>An old node, on the other hand, will interpret the script as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>&lt;may 1 2019 00:00:00&gt; OP_NOP2 OP_DROP
+OP_DUP OP_HASH160 &lt;PKH<sub>D</sub>&gt; OP_EQUALVERIFY OP_CHECKSIG</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It will</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Push the time <code>&lt;1 may 2019 00:00:00&gt;</code> to the stack.</p>
+</li>
+<li>
+<p><em>Do nothing.</em></p>
+</li>
+<li>
+<p>Drop the time value from the stack.</p>
+</li>
+<li>
+<p>Continue with normal signature verification.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Old nodes still treat <code>OP_NOP2</code> as they used to—by doing nothing and
+moving on. They aren’t aware of the new rules associated with the byte
+<code>b1</code>.</p>
+</div>
+<div class="paragraph">
+<p>The old and the new nodes will behave the same if the <code>OP_CLTV</code> succeeds
+on the new node. But if the <code>OP_CLTV</code> fails on the new node, the old
+node won’t fail, because “do nothing” never fails. The new nodes fail
+more often than the old nodes because new nodes have stricter rules. The
+old nodes will always finish the script program with success whenever
+the new nodes finish with success. This is known as a <em>soft fork</em>—a
+system upgrade that doesn’t require all nodes to upgrade. We’ll talk
+more about forks, system upgrades, and alternate currencies born from
+Bitcoin’s blockchain in <a href="#ch11">[ch11]</a>.</p>
+</div>
+<div class="paragraph">
+<p>You might be wondering what the <code>OP_DROP</code> instruction is for. <code>OP_DROP</code>
+takes the top item on the stack and discards it. <code>OP_CLTV</code> is designed
+to behave exactly like <code>OP_NOP2</code> when it succeeds. If <code>OP_CLTV</code> had been
+designed without taking old nodes into account, it would probably remove
+the top item from the stack. But because we need to take old nodes into
+account, <code>OP_CLTV</code> doesn’t do that. We must add the extra <code>OP_DROP</code>
+after <code>OP_CLTV</code> to get rid of the time item from the stack.</p>
+</div>
+<div class="paragraph">
+<p>This was an example of how old script operators can be repurposed to do
+something stricter without disrupting the entire network.</p>
+</div>
+<div class="paragraph">
+<p>This method of script upgrades has been done for two operators so far:</p>
+</div>
+<table class="tableblock frame-all grid-all fit-content">
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Byte</th>
+<th class="tableblock halign-left valign-top">Old code</th>
+<th class="tableblock halign-left valign-top">New code</th>
+<th class="tableblock halign-left valign-top">New meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>b1</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>OP_NOP2</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>OP_CLTV</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Verify that the spending transaction
+has a high enough absolute lock time.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>b2</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>OP_NOP3</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>OP_CSV</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Verify that the spending input has a
+  high enough relative lock time.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Only 10 <code>OP_NOP</code> operators are available to use for script upgrades, and
+such upgrades are limited to exactly mimic the <code>OP_NOP</code> behavior if they
+don’t fail.</p>
+</div>
+<div class="paragraph">
+<p>Sooner or later, we’ll need another script-upgrade mechanism, both
+because we’ll run out of <code>OP_NOP</code>s and because we want the new script
+operators to behave differently than <code>OP_NOP</code> when they succeed.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_solutions">10.2. Solutions</h3>
+<div class="paragraph">
+<p>A solution to all these problems was presented at a 2015
+conference. The solution was to move the signature scripts out of
+transactions altogether.</p>
+</div>
+<div class="paragraph">
+<p>Let’s look again at the anatomy of a normal transaction, shown in
+<a href="#fig1010">Figure 10</a>.</p>
+</div>
+<div id="fig1010" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-10.svg" alt="10 10" width="75%">
+</div>
+<div class="title">Figure 10. The txid is calculated from the entire transaction, including signature scripts.</div>
+</div>
+<div class="paragraph">
+<p>If we could change the system so the txid didn’t cover the signature
+script, we’d remove all known possibilities of unintentional transaction
+malleability. Unfortunately, if we did this, we’d make old software
+incompatible because it calculates the txid in the traditional way.</p>
+</div>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">BIP141</div>
+<div class="paragraph">
+<p>The new rules defined by segregated witness are specified in BIP141,
+“Segregated Witness (Consensus layer).”</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Segwit solves this problem and all the aforementioned problems in a
+forward- and backward-compatible way:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Forward-compatible because blocks created by new software work with old
+software</p>
+</li>
+<li>
+<p>Backward-compatible because blocks created by old software work with new
+software</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>In crypto-lingo, a <em>witness</em> basically means a signature. It’s something
+that attests to the authenticity of something. For a Bitcoin
+transaction, the witness is the contents of the signature scripts,
+because that’s what proves the transaction is authenticated.
+<em>Segregated</em> means parted, so we part the contents of the signature
+scripts from the transaction, effectively leaving the signature scripts
+empty, as <a href="#fig1011">Figure 11</a> shows.</p>
+</div>
+<div id="fig1011" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-11.svg" alt="10 11" width="75%">
+</div>
+<div class="title">Figure 11. A segwit transaction contains no signature data. The signatures are attached, instead. The txid doesn’t commit to the signatures.</div>
+</div>
+<div class="paragraph important">
+<p><em>Segregated witness</em> thus means the contents of the signature scripts
+are removed from the transaction and put into an external structure
+called the witness.</p>
+</div>
+<div class="paragraph">
+<p>We’ll follow a few segwit transactions to see how they affect the
+different parts of the Bitcoin system. But first, let’s get some bitcoin
+into a segwit wallet.</p>
+</div>
+<div class="sect3">
+<h4 id="_segwit_addresses">10.2.1. Segwit addresses</h4>
+<div class="paragraph">
+<p>Suppose your wallet uses segwit, and you’re selling a laptop to Amy.
+Your wallet needs to create an address that you can give to Amy. So far,
+nothing new.</p>
+</div>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">BIP173</div>
+<div class="paragraph">
+<p>This BIP defines the checksummed encoding scheme Bech32 and how segwit
+addresses are composed and encoded using Bech32.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>But segwit defines a new address type that’s encoded using <em>Bech32</em>
+instead of base58check. Suppose your wallet creates the following
+segwit address:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>bc1qeqzjk7vume5wmrdgz5xyehh54cchdjag6jdmkj</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This address format provides several improvements compared to the
+base58check addresses you’re used to:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>All characters are of the same case, which means</p>
+<div class="ulist">
+<ul>
+<li>
+<p>QR codes can be made smaller.</p>
+</li>
+<li>
+<p>Addresses are easier to verbally read out.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>The checksum used in Bech32 will detect up to four character errors
+with 100% certainty. If there are more character errors, the
+probability of detection failure is less than one in a billion. This
+is a major improvement to the 4-byte checksum in base58check, which
+doesn’t provide any guarantee.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Your segwit address consists of two parts. The first two characters,
+<code>bc</code> (short for bitcoin) is the <em>human-readable part</em>. The <code>1</code> is a
+delimiter between the human-readable part and the <em>data part</em>, which
+encodes the actual information that Amy will use to create the
+transaction output:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>A version, 0 in this case.</p>
+</li>
+<li>
+<p>A <em>witness program</em>. In this case, the witness program is a PKH,
+<code>c8052b79…3176cba8</code>.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>We’ll explain what the witness program is a bit further on. Think about
+it as a PKH for now. The version and witness program aren’t directly
+extractable from the address because they’re encoded using bech32. You
+give the address <code>bc1qeqzj…ag6jdmkj</code> to Amy by showing her a QR code.
+She has a modern wallet that understands this address format, so she
+scans your address and extracts the version and witness program, as
+<a href="#fig1012">Figure 12</a> illustrates.</p>
+</div>
+<div id="fig1012" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-12.svg" alt="10 12" width="100%">
+</div>
+<div class="title">Figure 12. Amy decodes the segwit address to get the witness version and the witness program.</div>
+</div>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">Checksum</div>
+<div class="paragraph">
+<p>I won’t go into details on the checksum. I encourage the interested
+reader to read BIP173.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>This occurs in multiple steps:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The human-readable part and the data part are separated.</p>
+</li>
+<li>
+<p>The data part of the address is converted, character by character,
+into numbers using a base32 lookup table. The first of these numbers
+is the witness version, <code>0</code>. The following numbers, except the last
+six, are the witness program. The last six numbers are the checksum.</p>
+</li>
+<li>
+<p>The checksum is verified; no errors were detected in this example.</p>
+</li>
+<li>
+<p>The witness program is rewritten by writing each number as a 5-bit
+number.</p>
+</li>
+<li>
+<p>The bits are rearranged in groups of 8 bits. Each such group
+represents a byte of the witness program.</p>
+</li>
+<li>
+<p>Amy extracts the witness program as <code>c8052b7…3176cba8</code>.</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>Amy creates a transaction with a new kind of pubkey script that you
+aren’t used to (<a href="#fig1013">Figure 13</a>).</p>
+</div>
+<div id="fig1013" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-13.svg" alt="10 13" width="75%">
+</div>
+<div class="title">Figure 13. Amy sends 0.1 BTC to your segwit address. The pubkey script doesn’t contain any script operators, just data.</div>
+</div>
+<div class="paragraph">
+<p>She broadcasts this transaction on the Bitcoin network. The network
+will accept the transaction because it’s correctly signed in the
+old-fashioned way. Eventually, it will be confirmed in a block. Your
+wallet will acknowledge that you’ve received the money, and you’ll
+give the laptop to Amy.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_spending_your_segwit_output">10.2.2. Spending your segwit output</h4>
+<div class="paragraph">
+<p>Now that you’ve received your money, you want to spend it on a used
+popcorn machine. It costs only 0.09 BTC. It’s a bargain! Suppose the
+owner of the popcorn machine has the segwit address <code>bc1qlk34…ul0qwrqp</code>.</p>
+</div>
+<div class="paragraph">
+<p>Your transaction sends the money to the popcorn machine owner’s segwit
+address and pays a 0.01 BTC transaction fee (<a href="#fig1014">Figure 14</a>). The input
+has an empty signature script; the signature data is instead added as
+a <em>witness field</em> in the attached witness.</p>
+</div>
+<div id="fig1014" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-14.svg" alt="10 14" width="75%">
+</div>
+<div class="title">Figure 14. You create and broadcast a payment to the popcorn machine owner.</div>
+</div>
+<div class="paragraph">
+<p>Had there been multiple inputs in this transaction, there would be
+multiple witness fields in the witness, one for each input. You can mix
+segwit inputs and legacy inputs, in which case the witness fields for
+the legacy inputs would be empty because their signatures are in the
+respective signature script, as they always were.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_verifying_the_segwit_transaction">10.2.3. Verifying the segwit transaction</h4>
+<div class="paragraph">
+<p>You’ve sent your transaction for the popcorn machine to the Bitcoin
+peer-to-peer network for processing. Let’s see how an upgraded full
+node verifies this transaction before relaying it to other nodes
+(<a href="#fig1015">Figure 15</a>). Because it’s running the latest and greatest software,
+it knows how to deal with segwit transactions.</p>
+</div>
+<div id="fig1015" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-15.svg" alt="10 15" width="100%">
+</div>
+<div class="title">Figure 15. A full node verifies your transaction’s witness. The pattern <code>00</code> followed by exactly 20 bytes gets special treatment.</div>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Remember p2sh</div>
+<div class="paragraph">
+<p>A segwit output is recognized by pattern matching, just like a p2sh
+output was in <a href="#ch05">[ch05]</a>.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>The full node, which knows about segwit, looks for a pattern in the
+pubkey script starting with a single version byte followed by a 2- to
+40-byte witness program. In this case, the pattern matches, which
+means this is a segwit output.</p>
+</div>
+<div class="paragraph">
+<p>The next step for the full node is to understand what <em>kind</em> of segwit
+output it is. As of this writing, there’s only one version of segwit
+output: version <code>00</code>. This version comes in two different flavors:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><em>Pay-to-witness-public-key-hash (p2wpkh)</em>, identified by a 20-byte
+witness program, as in this example</p>
+</li>
+<li>
+<p><em>Pay-to-witness-script-hash (p2wsh)</em>, identified by a 32-byte witness
+program. p2wsh will be explained later in this chapter.</p>
+</li>
+</ul>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Why “witness program”?</div>
+<div class="paragraph">
+<p>It’s called a witness program because it can be regarded as a program
+of a weird language. In version <code>00</code>, the witness program is a single
+operator whose length defines its behavior.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>In this case, we have the version byte <code>00</code> followed by exactly 20 bytes,
+which means this is a p2wpkh payment. If the version byte is unknown to
+the node, the node will immediately accept this input without further
+processing. This acceptance of unknown versions will become useful for
+future, forward-compatible upgrades of the script language. All segwit
+nodes will recognize version <code>00</code>.</p>
+</div>
+<div class="paragraph">
+<p>The p2wpkh is the simplest of the two types because it’s similar to the
+well-known p2pkh. Let’s look at how they both work:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><em>p2pkh</em>—The pubkey script contains the actual script that checks the
+signature in the signature script.</p>
+</li>
+<li>
+<p><em>p2wpkh</em>—The actual script is a predetermined template, and the
+witness program <em>is</em> the PKH to insert into the script template. The
+signature and the public key are taken from the witness.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>In the end, it’s seemingly the exact same program that is run for both
+of these two types. The difference is where the components come from.
+But other differences exist between segwit scripts and legacy
+scripts—for example, the meaning of <code>OP_CHECKSIG</code> has changed, as you’ll
+see in <a href="#new-hashing-algorithm">Section 10.2.6</a>.</p>
+</div>
+<div class="paragraph">
+<p>Why do p2wpkh at all when we’re running the exact same script program as
+in p2pkh? Recall that we want to solve transaction malleability. We do
+this by removing the signature data from the transaction inputs so no
+one can change the txid by making subtle changes to the signature
+script.</p>
+</div>
+<div class="paragraph">
+<p>The full node has verified this transaction and sends it to its peers.
+There’s just one problem: one peer has no idea what segwit is. It’s an
+old node that hasn’t been upgraded for a while.</p>
+</div>
+<div class="sect4">
+<h5 id="_verifying_on_old_nodes">“Verifying” on old nodes</h5>
+<div class="paragraph">
+<p>An old node has just received your transaction and wants to verify it.
+Old nodes know nothing about segwit or that there are witnesses attached
+to transactions. The old node downloads the transaction as it always
+has, which is without the witness attachment. <a href="#fig1016">Figure 16</a> shows what
+the node sees.</p>
+</div>
+<div id="fig1016" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-16.svg" alt="10 16" width="75%">
+</div>
+<div class="title">Figure 16. An old node sees just two data items in the pubkey script and an empty signature script.</div>
+</div>
+<div class="paragraph">
+<p>Because the node doesn’t know anything else, it creates the script
+program by taking the empty signature script and appending the pubkey
+script. The resulting program looks like this:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>00 c8052b799cde68ed8da8150c4cdef4ae3176cba8</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The node runs this program. The program puts two data items on the
+stack—first <code>00</code>, and then the <code>c805…cba8</code>. When it’s done, there’s
+nothing left to do but check whether the top item on the stack,
+<code>c805…cba8</code>, is <code>true</code>. Bitcoin defines anything that’s nonzero to be
+true, so this script will pass, and the transaction is authorized.</p>
+</div>
+<div class="paragraph">
+<p>This doesn’t seem very secure. This is known as an <em>anyone-can-spend</em>,
+meaning anyone can create a transaction that spends the output. It
+requires no signature. You just have to create an input with an empty
+signature script to take the money.</p>
+</div>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">Nonstandard transactions</div>
+<div class="paragraph">
+<p>A node that doesn&#8217;t recognize the spent script type normally doesn&#8217;t
+relay the transaction. It&#8217;s considered nonstandard. This relay policy
+reduces the risk that a transaction that uses the segwit output as an
+anyone-can-spend ends up in a block.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>In <a href="#ch11">[ch11]</a>, we’ll talk about how to deploy upgrades like segwit
+safely. For now, you can assume that 95% of the hashrate (miners) run
+with segwit. If a transaction uses your output as an anyone-can-spend,
+and a non-segwit miner includes it in a block, then this block will be
+rejected by 95% of the hashrate and consequently excluded from the
+strongest chain. The miner will lose its block reward.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_including_your_segwit_transaction_in_a_block">10.2.4. Including your segwit transaction in a block</h4>
+<div class="paragraph">
+<p>Your segwit transaction has propagated through the network, and all
+nodes have verified it along the way. Now, a miner wants to insert the
+transaction into a new block. Suppose the miner runs modern software and
+thus knows about segwit. Let’s look at how it’s included in the block
+(<a href="#fig1017">Figure 17</a>).</p>
+</div>
+<div id="fig1017" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-17.svg" alt="10 17" width="100%">
+</div>
+<div class="title">Figure 17. Your segwit transaction gets included in a block. The block commits to the witnesses by putting the witness commitment into an output of the coinbase transaction.</div>
+</div>
+<div class="paragraph">
+<p>The block is built as before, but with one important difference. A new
+block rule is introduced in segwit: if there are segwit transactions in
+the block, the coinbase transaction must contain an output with a
+<em>witness commitment</em>. This witness commitment is the combined hash of
+the <em>witness root hash</em> and a <em>witness reserved value</em>. The witness
+root hash is the merkle root of the <em>witness txids</em> (<em>wtxids</em>) of all
+transactions in the block. The wtxid is the hash of the transaction
+<em>including the witness</em>, if there is one. An exception exists for the
+coinbase, whose wtxid is always defined as 32 zero bytes. The witness
+reserved value is dedicated for future system upgrades.</p>
+</div>
+<div class="paragraph">
+<p>The witness commitment is written in an <code>OP_RETURN</code> output (<a href="#fig1018">Figure 18</a>).</p>
+</div>
+<div id="fig1018" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-18.svg" alt="10 18" width="75%">
+</div>
+<div class="title">Figure 18. The coinbase transaction’s witness contains the witness reserved value, and an <code>OP_RETURN</code> output contains the witness commitment.</div>
+</div>
+<div class="paragraph">
+<p>The witness reserved value can be any value. But a full node verifying
+this block needs a way to know what that value is. If the node didn’t
+know the witness reserved value, it wouldn’t be able to reconstruct the
+witness commitment for comparison with the <code>OP_RETURN</code> output’s witness
+commitment. The coinbase transaction’s witness contains the witness
+reserved value so full nodes can verify the witness commitment.</p>
+</div>
+<div class="sect4">
+<h5 id="_old_nodes_verifying_the_block">Old nodes verifying the block</h5>
+<div class="paragraph">
+<p>The block in <a href="#fig1017">Figure 17</a> is valid for new segwit-enabled full nodes, so
+it must also be valid for old nodes that don’t know what segwit is. An
+old node won’t download any witnesses from its peers because it doesn’t
+know they exist (<a href="#fig1019">Figure 19</a>).</p>
+</div>
+<div id="fig1019" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-19.svg" alt="10 19" width="75%">
+</div>
+<div class="title">Figure 19. An old node verifies the block with your transaction. It won’t verify the signatures or the witness commitment.</div>
+</div>
+<div class="paragraph">
+<p>This node will do what it’s always done—run the scripts of the
+transactions, which will look like spending anyone-can-spend outputs.
+That’s OK, move on. If some of the transactions in the block are
+non-segwit, those transactions will be fully verified.</p>
+</div>
+<div class="paragraph">
+<p>We’ve now gone full circle with your transaction to the popcorn machine
+owner, who hands over the machine to you.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_pay_to_witness_script_hash">10.2.5. Pay-to-witness-script-hash</h4>
+<div class="paragraph">
+<p>Do you remember when we introduced p2sh in <a href="#pay-to-script-hash">[pay-to-script-hash]</a>?
+p2sh moves the pubkey script part of the program to the spending
+input. Let’s have another look at the charity wallet that John, Ellen,
+and Faiza set up (<a href="#fig1020">Figure 20</a>).</p>
+</div>
+<div id="fig1020" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-20.svg" alt="10 20" width="75%">
+</div>
+<div class="title">Figure 20. John and Faiza spend an output from their multisig wallet.</div>
+</div>
+<div class="paragraph">
+<p>The idea here was that the payer—the donor, in this case—shouldn’t have
+to pay a higher fee for a big, complex pubkey script. Instead, the
+recipient wanting to use this fancy scheme will pay for the complexity.</p>
+</div>
+<div class="paragraph">
+<p>With segwit, you can do about the same thing using
+pay-to-witness-script-hash, which is the segwit version of p2sh. Isn’t
+naming in Bitcoin fantastic?</p>
+</div>
+<div class="paragraph">
+<p>Suppose John, Ellen, and Faiza use segwit for their charity wallet and
+that the previous popcorn machine owner wants to give the money he
+received for the popcorn machine to the charity.</p>
+</div>
+<div class="paragraph">
+<p>John, Ellen, and Faiza must provide the popcorn guy with a p2wsh
+address. Their <em>witness script</em> is the same as their p2sh <em>redeem
+script</em> was when they were using p2sh (<a href="#fig1021">Figure 21</a>).</p>
+</div>
+<div id="fig1021" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-21.svg" alt="10 21" width="50%">
+</div>
+<div class="title">Figure 21. The witness script is hashed into a witness script hash.</div>
+</div>
+<div class="paragraph">
+<p>They use this witness script hash to create a p2wsh address in the same
+way you created your p2wpkh address. They encode</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>00 983b977f86b9bce124692e68904935f5e562c88226befb8575b4a51e29db9062</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>using Bech32 and get the p2wsh address:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>bc1qnqaewluxhx7wzfrf9e5fqjf47hjk9jyzy6l0hpt4kjj3u2wmjp3qr3lft8</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This address is handed to the popcorn guy, who creates and broadcasts a
+transaction like that shown in <a href="#fig1022">Figure 22</a>.</p>
+</div>
+<div id="fig1022" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-22.svg" alt="10 22" width="100%">
+</div>
+<div class="title">Figure 22. The popcorn guy sends the money to the charity’s p2wsh address.</div>
+</div>
+<div class="paragraph">
+<p>The transaction has the witness attached, just like your transaction to
+the popcorn guy. The only difference between your transaction and the
+popcorn guy’s transaction is that their outputs have a different witness
+program length. Your transaction had a 20-byte witness program because
+it was a SHA256+RIPEMD160 hash of a public key, and the popcorn guy’s
+transaction has a 32-byte witness program because that’s a SHA256
+of a witness script.</p>
+</div>
+<div class="paragraph">
+<p>This transaction will be verified and eventually included in a block.</p>
+</div>
+<div class="sect4">
+<h5 id="_spending_the_p2wsh_transaction">Spending the p2wsh transaction</h5>
+<div class="paragraph">
+<p>Suppose John and Faiza want to spend the 0.08 BTC they got from the
+popcorn guy by sending it to a shelter for homeless people. The shelter
+happens to also have a p2wsh address. John and Faiza collaborate to
+create the transaction <a href="#fig1023">Figure 23</a> shows.</p>
+</div>
+<div id="fig1023" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-23.svg" alt="10 23" width="100%">
+</div>
+<div class="title">Figure 23. The charity pays 0.07 BTC to the shelter’s address. The witness is the signatures followed by a data item that contains the actual witness script.</div>
+</div>
+<div class="paragraph">
+<p>Note how there’s nothing in the signature script. When we used p2sh in
+<a href="#pay-to-script-hash">[pay-to-script-hash]</a>, the signature script got really big because it
+contained two signatures and the redeem script, which in turn
+contained three public keys. With segwit, all data is contained in the
+witness instead.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_verifying_the_p2wsh_input">Verifying the p2wsh input</h5>
+<div class="paragraph">
+<p>A full node that wants to verify this transaction needs to determine the
+type of output being spent (<a href="#fig1024">Figure 24</a>). It looks at the output, finds
+the pattern <code>&lt;version byte&gt; &lt;2 to 40 bytes data&gt;</code>, and concludes that
+this is a segwit output. The next thing to check is the value of the
+version byte.</p>
+</div>
+<div class="paragraph">
+<p>The version byte is <code>00</code>. A version <code>00</code> segwit output can have two
+different lengths of the witness program, 20 or 32 bytes. We covered the
+first one in the previous sections on p2wpkh. The witness program in
+this example is 32 bytes, which means this is a p2wsh output.</p>
+</div>
+<div id="fig1024" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-24.svg" alt="10 24" width="100%">
+</div>
+<div class="title">Figure 24. Preparing to verify the p2wsh input</div>
+</div>
+<div class="paragraph">
+<p>Special rules apply when spending a p2wsh output. First, the data items
+in the spending input’s witness field are pushed onto the program stack.
+Then, the top item on the stack, the witness script, is verified against
+the witness program in the output (<a href="#fig1025">Figure 25</a>).</p>
+</div>
+<div id="fig1025" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-25.svg" alt="10 25" width="75%">
+</div>
+<div class="title">Figure 25. Verifying the witness of a p2wsh payment</div>
+</div>
+<div class="paragraph">
+<p>The witness script is hashed and compared to the witness program in the
+spent output before being executed with the three items on the stack.
+This process is similar to that of verifying a p2sh payment.</p>
+</div>
+<div class="paragraph">
+<p>Miners and block verifiers handle all segwit transactions the same way,
+so there’s no difference in how the transaction is included in a block
+compared to p2wpkh transactions.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="new-hashing-algorithm">10.2.6. New hashing method for signatures</h4>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">BIP143</div>
+<div class="paragraph">
+<p>This solution is specified in BIP143, “Transaction Signature
+Verification for Version 0 Witness Program.”</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>One problem that segwit solves is inefficient signature hashing. As
+explained in <a href="#inefficient-sighash">Section 10.1.2</a>, if the number of inputs doubles,
+the time it takes to verify the transaction roughly quadruples. This
+is because you</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Double the number of signatures to verify</p>
+</li>
+<li>
+<p>Double the transaction’s size</p>
+</li>
+</ul>
+</div>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">This algorithm is simplified</div>
+<div class="paragraph">
+<p>In reality, three different intermediate hashes are created: one for
+all outpoints, one for all sequence numbers, and one for all outputs.
+However, the effect is the same. Read BIP143 for details.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>If you double the number of hashes performed <em>and</em> double the amount
+of data each hash needs to process, you effectively quadruple the
+total time spent on hashing.</p>
+</div>
+<div class="paragraph">
+<p>The solution is to make the signatures in steps. Suppose you want to
+sign all four inputs of a transaction, as <a href="#fig1026">Figure 26</a> shows.</p>
+</div>
+<div id="fig1026" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-26.svg" alt="10 26" width="100%">
+</div>
+<div class="title">Figure 26. Hashing is done in two steps. The intermediate hash is reused for each input.</div>
+</div>
+<div class="paragraph">
+<p>First you create an intermediate hash of the complete transaction. If
+the transaction contains non-segwit inputs, those signature scripts
+will be cleaned prior to hashing. The intermediate hash commits to all
+of that transaction’s inputs and outputs. Then, for each input, add
+the intermediate hash to some input-specific data:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><em>Spent outpoint</em>—The txid and index of the output this input spends</p>
+</li>
+<li>
+<p><em>Spent script</em>—The witness script or p2wpkh script corresponding to
+the spent output</p>
+</li>
+<li>
+<p><em>Spent amount</em>—The BTC value of the spent output</p>
+</li>
+</ul>
+</div>
+<div class="sidebarblock">
+<div class="content">
+<div class="title">Old hashing</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/u10-02.svg" alt="u10 02">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>The bulk of the transaction is hashed only once to create the
+intermediate hash. This drastically reduces the amount of hashing
+needed. When the number of inputs doubles, the needed amount of hashing
+only doubles. This makes the hashing algorithm perform <em>linearly with
+the number of inputs</em> instead of <em>quadratically</em>. The time to verify
+the transaction with 1,024 inputs discussed in <a href="#fig1007">Figure 7</a> is reduced
+from 262,144 ms to 512 ms.</p>
+</div>
+<div class="sect4">
+<h5 id="_signature_commits_to_amount">Signature commits to amount</h5>
+<div class="paragraph">
+<p>Why do we include the spent amount? We didn’t do that in the old
+signature-hashing algorithm. This has nothing to do with hashing
+efficiency, but it fixes yet another problem that offline wallets and
+some lightweight wallets face.</p>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Hardware wallets</div>
+<div class="paragraph">
+<p>A <em>hardware wallet</em> is an electronic device designed to keep private
+keys safe. Unsigned transactions are sent to the device for
+signing. The device usually requires a PIN code to sign.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>An offline wallet—for example, a hardware wallet—can’t know how much
+money is being spent. If the offline wallet is to sign a transaction,
+the wallet can’t display the transaction’s fee amount to the user
+because it can’t see the values of the outputs it’s spending
+(<a href="#fig1027">Figure 27</a>). It has no access to the blockchain.</p>
+</div>
+<div id="fig1027" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-27.svg" alt="10 27" width="75%">
+</div>
+<div class="title">Figure 27. An offline wallet can’t know a transaction’s fee.</div>
+</div>
+<div class="paragraph">
+<p>This is true for both non-segwit and segwit transactions. But with
+segwit transactions, when the signatures commit to the spent output
+amounts, the wallet must get the amounts from somewhere to be able to
+sign. Suppose the input amounts are somehow provided to the offline
+wallet, alongside the transaction to sign. The wallet can then sign the
+transaction using those amounts and even show the user what fee is being
+paid before signing.</p>
+</div>
+<div class="paragraph">
+<p>If the offline wallet receives the wrong amount, it won’t be able to
+tell. It can’t verify the input values. But because the signatures now
+cover the amounts, the transaction will be invalid. A verifying node
+will know the correct amounts and use them when verifying the
+signatures. The signature check will fail. The new signature hashing
+algorithm makes it impossible to trick a wallet into signing a valid
+transaction with a fee the user didn’t intend.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_bandwidth_savings">10.2.7. Bandwidth savings</h4>
+<div class="paragraph">
+<p>Segwit removes the signature data from the transaction, so when a
+lightweight wallet requests a transaction from a full node, the full
+node can send the transaction without the witness data. This means
+less data traffic is needed per transaction. This fact can be used to
+either</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Keep the bloom filter size as is and get about 50% reduction in data
+traffic</p>
+</li>
+<li>
+<p>Improve privacy by decreasing the size of the bloom filter to get
+more false positives without increasing data traffic</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_upgradable_script">10.2.8. Upgradable script</h4>
+<div class="paragraph">
+<p>The version byte is used for future script language upgrades. Before
+segwit, we had to use the <code>OP_NOP</code>s to introduce new features to the
+language—for example, <code>OP_CSV</code>. This wasn’t optimal for the following
+reasons:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>We might run out of <code>OP_NOP</code>s—there are eight left.</p>
+</li>
+<li>
+<p>The <code>OP_NOP</code>s can’t be redefined in arbitrary ways; they still
+need to behave as <code>OP_NOP</code>s in case the new behavior succeeds.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The version byte allows for much more powerful future upgrades. We can
+do anything from slight modifications of specific operators to
+implementing completely new languages.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_wallet_compatibility">10.3. Wallet compatibility</h3>
+<div class="paragraph">
+<p>Most old wallets won’t support sending bitcoin to a segwit address. They
+usually only allow p2pkh and p2sh addresses. So segwit’s developers
+created <em>p2wsh nested in p2sh</em> and <em>p2wpkh nested in p2sh</em>: ways to
+trigger the segwit verification instead of the legacy script
+verification.</p>
+</div>
+<div class="paragraph">
+<p>Suppose you have a segwit wallet and want to sell your popcorn machine
+to your neighbor, Nina. But Nina doesn’t have a segwit-aware wallet. She
+can only pay to ordinary addresses, like p2pkh and p2sh. You can make a
+p2sh address that Nina can pay to (<a href="#fig1028">Figure 28</a>).</p>
+</div>
+<div id="fig1028" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-28.svg" alt="10 28" width="75%">
+</div>
+<div class="title">Figure 28. Nina sends 0.1 BTC to your segwit wallet using a p2wpkh inside a p2sh address.</div>
+</div>
+<div class="paragraph">
+<p>Nina pays to <code>3KsJCgA6…k2G6C1Be</code>, which is an old-style p2sh address
+that contains the hash of the redeem script <code>00 bb4d4977…75ff02d1</code>. This
+redeem script is a version byte <code>00</code> followed by a 20-byte witness
+program. This is the pattern for p2wpkh, which we covered earlier.
+Nina’s wallet knows nothing about this. It sees only a p2sh address and
+makes a payment to that script hash.</p>
+</div>
+<div class="paragraph">
+<p>Later, when you want to spend your output, you create a transaction like
+the one in <a href="#fig1029">Figure 29</a>.</p>
+</div>
+<div id="fig1029" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-29.svg" alt="10 29" width="75%">
+</div>
+<div class="title">Figure 29. You spend the money you got from Nina by setting the version byte and witness program in the redeem script in your input’s signature script.</div>
+</div>
+<div class="paragraph">
+<p>You create a witness, just as you would with a normal p2wpkh input,
+but you also set the redeem script as a single data item in the
+signature script. The redeem script happens to be a version byte
+followed by your 20-byte PKH. Using this signature script, old nodes
+can verify that the script hash in the spent output matches the hash
+of the redeem script in the signature script. New nodes will detect
+that the redeem script is a version byte and a witness program, and
+verify the witness accordingly.</p>
+</div>
+<div class="paragraph">
+<p>This way of nesting a segwit payment inside a p2sh payment can also be
+used for p2wsh payments in a similar fashion: a p2wsh nested in p2sh.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="recap-of-payment-types">10.4. Recap of payment types</h3>
+<div class="paragraph">
+<p>We’ve talked about several types of payments. <a href="#fig1030">Figure 30</a> through <a href="#fig1035">Figure 35</a>
+summarize the most common ones.</p>
+</div>
+<div id="fig1030" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-30.svg" alt="10 30" width="75%">
+</div>
+<div class="title">Figure 30. p2pkh: address format <code>1&lt;some base58 characters&gt;</code></div>
+</div>
+<div id="fig1031" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-31.svg" alt="10 31" width="75%">
+</div>
+<div class="title">Figure 31. p2sh: address format <code>3&lt;some base58 characters&gt;</code></div>
+</div>
+<div id="fig1032" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-32.svg" alt="10 32" width="75%">
+</div>
+<div class="title">Figure 32. p2wpkh: address format <code>bc1q&lt;38 base32 characters&gt;</code></div>
+</div>
+<div id="fig1033" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-33.svg" alt="10 33" width="75%">
+</div>
+<div class="title">Figure 33. p2wsh: address format <code>bc1q&lt;58 base32 characters&gt;</code></div>
+</div>
+<div id="fig1034" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-34.svg" alt="10 34" width="75%">
+</div>
+<div class="title">Figure 34. p2wpkh nested in p2sh: address format <code>3&lt;some base58 characters&gt;</code></div>
+</div>
+<div id="fig1035" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-35.svg" alt="10 35" width="75%">
+</div>
+<div class="title">Figure 35. p2wsh nested in p2sh: address format <code>3&lt;some base58 characters&gt;</code></div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_block_limits">10.5. Block limits</h3>
+<div class="paragraph">
+<p>Bitcoin blocks are limited to 1,000,000 bytes in size and 20,000
+signature operations.</p>
+</div>
+<div class="sect3">
+<h4 id="block-size-limit">10.5.1. Block size limit</h4>
+<div class="paragraph">
+<p>In 2010, the Bitcoin software was updated with a block size limit of
+1,000,000 bytes. It isn’t totally clear why this was done, but most
+people think the limit was introduced to reduce the impact of certain
+denial of service (DoS) attacks. DoS attacks aim at stalling or
+crashing Bitcoin nodes so the network can’t function properly.</p>
+</div>
+<div class="paragraph">
+<p>One way to mess with the network is to create a very large block that
+takes 10 seconds to download on a good internet connection. This might
+seem fast enough, but uploading this block to five peers will take 50
+seconds. This will cause the block to propagate very slowly across the
+peer-to-peer network, which will increase the risk of an unintended
+blockchain split. Unintended splits will resolve with time, as you saw
+in <a href="#draw-lucky-numbers">[draw-lucky-numbers]</a>, but Bitcoin’s overall security will
+decrease during such splits.</p>
+</div>
+<div class="paragraph">
+<p>Another potential problem with big blocks that attackers could exploit
+is that people with poor internet connections will be left out
+completely because they can’t keep up with the network, or they don’t
+have the required processing power, RAM, or disk storage space needed
+to run a full node. These people will need to switch to systems with
+less security, such as lightweight wallets, reducing the security of
+the whole network.</p>
+</div>
+<div class="paragraph">
+<p>Regardless of the reason, this limit is in place.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_signature_operations_limit">10.5.2. Signature operations limit</h4>
+<div class="paragraph">
+<p>The signature operations limit was put in place because
+signature-verification operations are relatively slow, especially in
+non-segwit transactions. An attacker could stuff a transaction with a
+tremendous number of signatures, causing verifying nodes to be busy
+verifying signatures for a long time. The limit of 20,000 such
+operations per block was somewhat arbitrarily chosen to prevent such
+an attack.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_increasing_the_limits">10.5.3. Increasing the limits</h4>
+<div class="paragraph">
+<p>It will take a <em>hard fork</em> to remove or increase these limits. A hard
+fork is a rule change that causes old nodes and new nodes to disagree
+on what the strongest valid blockchain is. We’ll examine forks and
+upgrades in <a href="#ch11">[ch11]</a>. For now, suppose new nodes decide that
+8,000,000-byte blocks are OK. When a miner publishes a block that’s
+bigger than 1,000,000 bytes, new nodes will accept it, whereas old
+nodes won’t. A permanent blockchain split will occur, and we’ll
+effectively have two different cryptocurrencies.</p>
+</div>
+<div class="paragraph">
+<p>Segwit offers an opportunity to somewhat increase both these limits
+without a hard fork.</p>
+</div>
+<div class="sect4">
+<h5 id="increasing-the-block-size-limit">Increasing the block size limit</h5>
+<div class="paragraph">
+<p>The old rule of 1,000,000 bytes remains, so old nodes can continue
+working as they used to. New nodes will count block size differently,
+but in a compatible way. Witness bytes will be counted with a “discount”
+compared to other bytes, such as the block header or transaction
+outputs. A new measurement, <em>block weight</em>, is put in place. A block’s
+maximum weight is 4,000,000 <em>weight units</em> (WU; <a href="#fig1036">Figure 36</a>).</p>
+</div>
+<div id="fig1036" class="imageblock">
+<div class="content">
+<img src="images/ch10/10-36.svg" alt="10 36" width="100%">
+</div>
+<div class="title">Figure 36. Witness bytes and nonwitness bytes are counted differently. Witness bytes contribute less to the block weight and not at all to the traditional block size, the base block size.</div>
+</div>
+<div class="paragraph">
+<p>Let’s call the block excluding the witnesses the <em>base block</em>:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>1 byte of base block data is counted as 4 WU.</p>
+</li>
+<li>
+<p>1 byte of witness data is counted as 1 WU.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph important">
+<p>The effect is that the old 1,000,000-byte block size limit remains
+because the new rule and the old rule are effectively the same on the
+base block. But the more segwit is used, the more data can be moved from
+the base block to the witnesses, which allows for a bigger total block
+size.</p>
+</div>
+<div class="paragraph">
+<p>Suppose the witnesses in a block account for ratio \(r\) of the data in
+a block. The maximum block weight is 4,000,000, and a total block size
+\(T\) gives</p>
+</div>
+<div class="stemblock">
+<div class="content">
+\[4(1-r)T+rT \leq 4*10^{6} \\
+(4-3r)T \leq 4*10^{6} \\
+T \leq \frac {4*10^{6}} {4-3r}\]
+</div>
+</div>
+<div class="paragraph">
+<p>Inserting various values of \(r\) into this formula gives different
+maximum total block sizes, as <a href="#tab1002">Table 2</a> shows.</p>
+</div>
+<table id="tab1002" class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 2. Maximum block sizes for different ratios of witness data</caption>
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">\(r\) (witness bytes/total bytes)</th>
+<th class="tableblock halign-left valign-top">Max total block size (bytes)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1,000,000</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1,081,081</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0.3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1,290,323</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0.5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1,600,000</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0.6</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1,818,182</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0.7</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2,105,263</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">0.8</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2,500,000</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>As the relative amount of witness data increases in the block, we can
+squeeze in more transactions. The effect is an actual maximum block
+size increase.</p>
+</div>
+<div class="paragraph">
+<p>The witness discount is implemented for several reasons:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The signature scripts and witnesses don’t go into the UTXO set. Data
+that goes into the UTXO set has higher costs because the UTXO set
+should preferably be stored in RAM for fast transaction verification.</p>
+</li>
+<li>
+<p>It gives wallet developers, exchanges, and smart contract developers
+more incentive to make fewer outputs, which reduces the UTXO set’s
+size.  For example, an exchange can choose to consolidate its many
+outputs into a few outputs.</p>
+</li>
+<li>
+<p>The witnesses don’t have to be sent to a lightweight wallet.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_increasing_the_signature_operations_limit">Increasing the signature operations limit</h5>
+<div class="paragraph">
+<p>Because we’re increasing the block size with segwit, we also need to
+increase the number of allowed signature operations; allowing more
+transaction data per block should imply that we also need to allow
+more signature operations. We can increase the limit in the same
+manner as we increased the block size limit.</p>
+</div>
+<div class="paragraph">
+<p>We increase the number of allowed signature operations from 20,000 to
+80,000 and count each legacy signature as four operations and each
+segwit operation as one operation. We count a segwit signature
+operation less than a legacy operation because the former is more
+efficient, as discussed in <a href="#new-hashing-algorithm">Section 10.2.6</a>.</p>
+</div>
+<div class="paragraph">
+<p>This will have the same effect as the block size increase. If a block
+contains only legacy inputs, the old limit of 20,000 actual operations
+remains. If the block contains only segwit inputs, the new limit of
+80,000 actual operations is in effect. Any combination of legacy and
+segwit inputs in a block will result in a limit somewhere between
+20,000 and 80,000 actual signature operations.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_recap">10.6. Recap</h3>
+<div class="paragraph">
+<p>This chapter has walked through segregated witness, which solves some
+problems:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><em>Transaction malleability</em>—A txid might change without changing the
+effect of its transaction. This can cause broken links between
+transactions, making the child transaction invalid.</p>
+</li>
+<li>
+<p><em>Inefficient signature verification</em>—As the number of inputs doubles
+in a transaction, the time to verify the transaction increases
+quadratically. This is because both the transaction’s size and the
+number of signatures to verify doubles.</p>
+</li>
+<li>
+<p><em>Wasted bandwidth</em>—Lightweight wallets must download the transactions,
+including all signatures, to be able to verify the merkle proof, but the
+signature data is useless to them because they don’t have the spent
+outputs to verify against.</p>
+</li>
+<li>
+<p><em>Hard to upgrade</em>—There is limited room for script language
+upgrades.  A handful of <code>OP_NOP</code>s are left, and you can’t change an
+<code>OP_NOP</code> however you please. If the new operator behavior succeeds, it
+must behave exactly as an <code>OP_NOP</code>.</p>
+</li>
+</ul>
+</div>
+<div class="sect3">
+<h4 id="_solutions_2">10.6.1. Solutions</h4>
+<div class="paragraph">
+<p>By moving signature data out of the base transaction, that data will no
+longer be part of the txid.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/u10-03.svg" alt="u10 03" width="75%">
+</div>
+</div>
+<div class="paragraph">
+<p>If the signature is malleated, it won’t affect the txid. Unconfirmed
+chains of transactions become unbreakable.</p>
+</div>
+<div class="paragraph">
+<p>A new signature-hashing algorithm is used that makes the verification
+time grow <em>linearly</em> with the number of inputs. The old
+signature-hashing algorithm hashes the entire transaction for each
+signature.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/u10-04.svg" alt="u10 04" width="75%">
+</div>
+</div>
+<div class="paragraph">
+<p>Signatures in witnesses will hash the transaction only once.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/10-26.svg" alt="10 26" width="100%">
+</div>
+</div>
+<div class="paragraph">
+<p>The intermediate hash is reused for each signature, which greatly
+reduces the total amount of hashing.</p>
+</div>
+<div class="paragraph">
+<p>The bandwidth that lightweight wallets require decreases because they
+don’t have to download the witnesses to verify that a transaction is
+included in a block. They can use the per-transaction savings to
+increase their privacy by decreasing their bloom filter size or to
+reduce data traffic with preserved privacy.</p>
+</div>
+<div class="paragraph">
+<p>The witness version in the pubkey script allows for future upgrades of
+the script language. These upgrades can be arbitrarily complex with no
+restrictions on functionality.</p>
+</div>
+<div class="paragraph">
+<p>New rules apply for blocks containing segwit transactions. An output in
+the coinbase transaction must commit to all the block’s witnesses.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/u10-06.svg" alt="u10 06" width="100%">
+</div>
+</div>
+<div class="paragraph">
+<p>Old nodes will still work because they aren’t aware of the commitment in
+the coinbase transaction. This let us introduce segwit without
+disrupting, or splitting, the blockchain into two separate
+cryptocurrencies.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_exercises">10.7. Exercises</h3>
+<div class="sect3">
+<h4 id="_warm_up">10.7.1. Warm up</h4>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>What part of the transaction is the cause for transaction
+malleability?</p>
+</li>
+<li>
+<p>Why is transaction malleability a problem?</p>
+</li>
+<li>
+<p>Why do we say that legacy transaction verification time
+increases quadratically with the number of inputs?</p>
+</li>
+<li>
+<p>Why do lightweight wallets need the signatures of a legacy
+transaction to verify that it’s included in a block?</p>
+</li>
+<li>
+<p>Suppose you want to add a new feature to Bitcoin’s Script language,
+and you want to redefine the behavior of <code>OP_NOP5</code>. What’s important
+to think about when you design the new behavior to avoid a blockchain
+split (because not all nodes will upgrade simultaneously)?</p>
+</li>
+<li>
+<p>Which of the following are segwit addresses? What kind of segwit
+addresses are they?</p>
+<div class="olist loweralpha">
+<ol class="loweralpha" type="a">
+<li>
+<p><code>bc1qeqzjk7vume5wmrdgz5xyehh54cchdjag6jdmkj</code></p>
+</li>
+<li>
+<p><code>c8052b799cde68ed8da8150c4cdef4ae3176cba8</code></p>
+</li>
+<li>
+<p><code>bc1qnqaewluxhx7wzfrf9e5fqjf47hjk9jyzy6l0hpt4kjj3u2wmjp3qr3lft8</code></p>
+</li>
+<li>
+<p><code>3KsJCgA6ubxgmmzvZaQYR485tsk2G6C1Be</code></p>
+</li>
+<li>
+<p><code>00 bb4d49777d981096a75215ccdba8dc8675ff02d1</code></p>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p>What’s the witness version used for? The witness version is the
+first number in a segwit output—for example, <code>00</code> in</p>
+<div class="literalblock">
+<div class="content">
+<pre>00 bb4d49777d981096a75215ccdba8dc8675ff02d1</pre>
+</div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_dig_in">10.7.2. Dig in</h4>
+<div class="olist arabic">
+<ol class="arabic" start="8">
+<li>
+<p>Explain how a segwit transaction is valid according to an old node
+that knows nothing about segwit. This is what the old node sees:</p>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/u10-07.svg" alt="u10 07" width="100%">
+</div>
+</div>
+</li>
+<li>
+<p>Explain how a segwit transaction is verified by a new node that
+knows about segwit. This is what it sees:</p>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/u10-08.svg" alt="u10 08" width="100%">
+</div>
+</div>
+</li>
+<li>
+<p>Suppose you want to upgrade the Bitcoin system. You want the
+witness commitment to commit to the transaction fees in the block, in
+addition to the witness root hash, by making a merkle tree of all
+transaction fees. Suggest how the fee merkle root could be committed to
+in the block without breaking compatibility with old nodes. You don’t
+have to think about future upgradability after this change, because
+that’s more complex. Use the following figure as a hint:</p>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch10/u10-09.svg" alt="u10 09" width="100%">
+</div>
+</div>
+</li>
+<li>
+<p>How would old nodes and new nodes verify blocks that contain
+the commitment in the previous exercise?</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_summary">10.8. Summary</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>Segwit moves signature script data out of transactions to solve
+transaction malleability issues.</p>
+</li>
+<li>
+<p>Segwit uses a new signature-hashing algorithm that makes transaction
+verification faster. This helps nodes stay up to date with less
+resources.</p>
+</li>
+<li>
+<p>Lightweight wallets get better privacy with preserved data traffic
+by not downloading witness data.</p>
+</li>
+<li>
+<p>The witness version byte of the pubkey script makes upgrading the
+script language easier.</p>
+</li>
+<li>
+<p>We can increase the maximum block size somewhat by counting witness
+bytes with a discount.</p>
+</li>
+<li>
+<p>A new address format helps wallets distinguish between legacy
+payments and segwit payments.</p>
+</li>
+<li>
+<p>Segwit can be “embedded” in old-style p2sh addresses to let old
+wallets send money to segwit wallets.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2021-05-19 10:45:14 +0200
+</div>
+</div>
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  messageStyle: "none",
+  tex2jax: {
+    inlineMath: [["\\(", "\\)"]],
+    displayMath: [["\\[", "\\]"]],
+    ignoreClass: "nostem|nolatexmath"
+  },
+  asciimath2jax: {
+    delimiters: [["\\$", "\\$"]],
+    ignoreClass: "nostem|noasciimath"
+  },
+  TeX: { equationNumbers: { autoNumber: "none" } }
+})
+MathJax.Hub.Register.StartupHook("AsciiMath Jax Ready", function () {
+  MathJax.InputJax.AsciiMath.postfilterHooks.Add(function (data, node) {
+    if ((node = data.script.parentNode) && (node = node.parentNode) && node.classList.contains("stemblock")) {
+      data.math.root.display = "block"
+    }
+    return data
+  })
+})
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_HTMLorMML"></script>
+</body>
+</html>

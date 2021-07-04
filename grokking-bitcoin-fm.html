@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 2.0.15">
+<meta name="author" content="Kalle Rosenbaum">
+<title>Grokking Bitcoin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="style/asciidoctor.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="style/grokking-bitcoin.css">
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  messageStyle: "none",
+  tex2jax: {
+    inlineMath: [["\\(", "\\)"]],
+    displayMath: [["\\[", "\\]"]],
+    ignoreClass: "nostem|nolatexmath"
+  },
+  asciimath2jax: {
+    delimiters: [["\\$", "\\$"]],
+    ignoreClass: "nostem|noasciimath"
+  },
+  TeX: { equationNumbers: { autoNumber: "none" } }
+});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_HTMLorMML"></script>
+</head>
+<body class="book toc2 toc-left">
+<div id="header">
+<h1>Grokking Bitcoin</h1>
+<div class="details">
+<span id="author" class="author">Kalle Rosenbaum</span><br>
+</div>
+<div id="toc" class="toc2">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#_dedication">Dedication</a></li>
+<li><a href="#_foreword">Foreword</a></li>
+<li><a href="#_preface">Preface</a></li>
+<li><a href="#_acknowledgments">Acknowledgments</a></li>
+<li><a href="#_about_this_book">About this book</a>
+<ul class="sectlevel2">
+<li><a href="#_who_should_read_this_book">Who should read this book</a></li>
+<li><a href="#_how_this_book_is_organized_a_roadmap">How this book is organized: A roadmap</a></li>
+<li><a href="#_code_conventions">Code conventions</a></li>
+<li><a href="#_livebook_discussion_forum">liveBook discussion forum</a></li>
+<li><a href="#_other_author_resources">Other author resources</a></li>
+</ul>
+</li>
+<li><a href="#_about_the_author">About the author</a></li>
+</ul>
+</div>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="_dedication">Dedication</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><em>To the love of my life, my wife, Linnéa. Smart, faithful, real.</em></p>
+</div>
+<div class="paragraph">
+<p><em>And to all awesome Bitcoiners everywhere.</em></p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_foreword">Foreword</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>What is the difference between Bitcoin and the various monies used in
+multiplayer games? Each is defined by software, is created out of
+nothing, and can have prices comparable to traditional currencies.
+To a casual observer, they seem much the same.</p>
+</div>
+<div class="paragraph">
+<p>But there is an important difference in how they’re designed that affects
+every aspect of their respective systems: whereas game currencies try to
+stop cheating by reactively banning users suspected of abuse, Bitcoin
+proactively prevents various types of cheating by making them
+impossible, impractical, or less profitable than honest behavior.</p>
+</div>
+<div class="paragraph">
+<p><em>Grokking Bitcoin</em> describes exactly how Bitcoin accomplishes that. As
+you learn about hash functions, digital signatures, proof of work, and
+many other technical concepts, you’ll see over and over that Bitcoin
+effectively prevents cheating without requiring the global banning of any
+user.</p>
+</div>
+<div class="paragraph">
+<p>The book then demonstrates the many benefits of this key feature. As you
+learn about addresses, wallets, miners, and nodes, you’ll discover that
+if no one can cheat effectively, it’s safe to allow everyone to
+participate in every part of the protocol, leaving no one in a trusted
+position of authority over the system. And with no one holding a trusted
+position, there’s no need for identities in the first place. <em>Grokking
+Bitcoin</em> goes on to show how it’s possible for anyone to use
+the public Bitcoin blockchain with a degree of privacy.</p>
+</div>
+<div class="paragraph">
+<p>A decentralized system that doesn’t use identities or depend on trust is
+quite different from the everyday systems with which most of us are
+familiar. Author Kalle Rosenbaum turns this liability into an asset by
+starting the explanation of each part of Bitcoin using a centralized,
+trusted, or identity-dependent system that any reader can intuitively
+understand. He then transforms that basic system step-by-step into the
+decentralized, trustless, and pseudonymous system implemented in
+Bitcoin. With each step filled with clear explanations and many excellent
+illustrations, even the most highly technical topic is made accessible
+to the interested layperson.</p>
+</div>
+<div class="paragraph">
+<p>Bitcoin needs books like <em>Grokking Bitcoin</em>, but it also needs an active
+group of users who read those books and come to understand the technical
+principles on which Bitcoin is built. During these early days
+of what I hope will be the long history of Bitcoin, users are often
+asked to evaluate proposed changes to the system—changes that may affect
+the security and privacy of their bitcoins. Those who have read this
+book will understand how the system prevents cheating and will be able
+to help ensure that future changes preserve that essential feature and
+its many benefits.</p>
+</div>
+<div class="paragraph">
+<p>—David A. Harding<br>
+Contributor to Bitcoin documentation</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_preface">Preface</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Bitcoin is changing the world.</p>
+</div>
+<div class="paragraph">
+<p>The world has seen many major improvements to human life, among which
+are vaccines, electricity, radio, automobiles, and the internet. Some of
+these technologies start out as rich people’s games, but eventually they
+trickle down to the general public and bring huge benefits to Earth’s
+population. Bitcoin will soon be right there among them. This is what
+makes me super-excited about Bitcoin.</p>
+</div>
+<div class="paragraph">
+<p>Luckily, I’m fortunate enough to live in a pretty functional society.
+When conducting financial transactions, I never have to worry that
+someone will come knocking on my door. I’ve never felt that I need to
+spend my money immediately because otherwise hyperinﬂation will eat my
+lunch. But that also makes it harder for me to grok why Bitcoin is
+important. Bitcoin is mostly theoretical to me, but when I hear reports
+from less fortunate people living under oppressive or incompetent
+regimes about how Bitcoin makes their lives better, it becomes very
+real. Bitcoin will give people an opportunity to opt out of the system
+that’s holding them hostage.</p>
+</div>
+<div class="paragraph">
+<p>Satoshi Nakamoto, a pseudonym for a person or a group that wants to
+remain unknown, published a scientific paper on a cryptography-oriented
+e-mail list in October 2008. The title of the paper was, “Bitcoin: A
+Peer-to-Peer Electronic Cash System” (see web resource 1 in appendix C).
+Nakamoto’s paper described the vital parts of Bitcoin, the first digital
+money system where there’s no central authority to issue money or
+process transactions. In January 2009, Nakamoto published the first
+software program to implement the described system. Bitcoin didn’t get
+much attention then, apart from within a very limited set of
+cryptography experts. Gradually, as the system proved itself to be
+working, more people became interested. But the resistance against
+Bitcoin was and is still far bigger and louder than the adopters, as is
+the case with all groundbreaking new technology. As of 2019, hundreds of
+millions of people are aware of Bitcoin, and tens of millions of people
+are using Bitcoin.</p>
+</div>
+<div class="paragraph">
+<p>When I started exploring Bitcoin in 2013, it took me a long time to
+acquire a decent understanding of the technology. That’s not because I’m
+remarkably stupid; it’s because Bitcoin is a complex system. It’s not
+just a fancy database—it’s a mishmash of economy, mathematics,
+technology, and anthropology.</p>
+</div>
+<div class="paragraph">
+<p>I started a technical blog about Bitcoin in 2015, and I guess Manning
+liked my content, because the company sent me an email asking if I was
+interested in writing a book about “blockchain.” Since my passion is
+Bitcoin—not only the blockchain, an overly hyped word for Bitcoin’s
+database—I replied and thanked Manning and said I’d be interested in
+writing a book about Bitcoin. I’ve struggled a few years trying to find
+a place in the Bitcoin community, and this opportunity seemed like a
+great fit. The project started, and it turned out to be far harder and
+far more time-consuming than I expected.</p>
+</div>
+<div class="paragraph">
+<p>This book began as a typical technical description of Bitcoin, but it
+was difficult to teach one topic without the full context. The cognitive
+load at the beginning of the book would be too overwhelming. It became
+clear that I needed to do something else. I discussed it with my wife,
+and we came up with the idea of conceptually building Bitcoin from the
+ground up. The book starts with a really simple spreadsheet system that
+anyone can understand, and that system evolves into Bitcoin. Each
+chapter points out some problems with the current system, and we fix them
+by adding the technology covered by that chapter.</p>
+</div>
+<div class="paragraph">
+<p>The manuscript for <em>Grokking Bitcoin</em> will be released under the
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+(CC BY-NC-SA 4.0) license shortly after its print publication. Releasing
+a version under an open license was a requirement I had in writing this
+book. It is my way of giving back to the Bitcoin community that has
+given me so much over the years. It is my, and Manning’s, hope that
+those who can’t afford to buy this book will benefit from the open
+source version. There are, of course, less philanthropic reasons. We
+also hope that open sourcing this book will give it more visibility, as
+potential readers browse through it. Please buy the beautifully typeset
+version if you can afford it. Manning and I have spent an enormous
+amount of time and effort in producing this book, and we would greatly
+appreciate the income!</p>
+</div>
+<div class="paragraph">
+<p>I hope you enjoy reading <em>Grokking Bitcoin</em> as much as I suffered
+writing it!</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_acknowledgments">Acknowledgments</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>I have a lot of people to thank for making this book possible.</p>
+</div>
+<div class="paragraph">
+<p>First, I’d like to thank my wife, Linnéa, for all our valuable
+discussions and your consistent encouragement. You are absolutely
+fantastic.</p>
+</div>
+<div class="paragraph">
+<p>Christina Taylor at Manning, my dear development editor: thank you for
+keeping me busy. Work work work. Thank you also to Bert Bates for your
+very valuable input on the pedagogy.</p>
+</div>
+<div class="paragraph">
+<p>I’d like to also thank everyone else at Manning who contributed with
+their professionalism, including Ozren Harlovic, Rebecca Rinehart,
+Candace Gillhoolley, Ana Romac, Michael Stephens, Erin Twohey,
+Christopher Kaufmann, Matko Hrvatin, and Greg Wild. A special thanks to
+the fantastic production team: Chuck Larson, illustrator; Rebecca
+Deuel-Gallegos, copy editor; Kevin Callahan, typesetter;
+Tiffany Taylor, proofreader; and Lori Weidert, production editor.</p>
+</div>
+<div class="paragraph">
+<p>I’d also like to thank Jonathan Jogenfors and Pontus Lindblom for
+reviewing some chapters covering their respective fields of expertise.</p>
+</div>
+<div class="paragraph">
+<p>A lot of people on various internet forums were very helpful during my
+research. The ones that stand out the most are David A. Harding, Pieter
+Wuille, and Mark “Murch” Erhardt. Thank you for all our Twitter
+conversations and great answers on Bitcoin Stack Exchange (see web
+resource 2 in appendix C).</p>
+</div>
+<div class="paragraph">
+<p>I got help from Andreas M. Antonopoulos when negotiating the open source
+terms for this book. Your encouragement during that process was gold.
+Thank you! In addition, thanks for the “vegetarian restaurant” analogy
+used in <a href="#ch11">[ch11]</a>. Thank you also for your amazing talks; you are a
+major source of inspiration for me.</p>
+</div>
+<div class="paragraph">
+<p>I wrote this book using Asciidoctor, which is a text markup language.
+Thank you, Dan Allen, for your hard work on Asciidoctor; it’s fantastic.</p>
+</div>
+<div class="paragraph">
+<p>The book went through three review rounds, with several reviewers in
+each round. Those reviews were extremely useful in vetting ideas and
+finding gaps in the learning path. Thank you to Jan Goyvaerts, Max
+Humber, Iryna Romanenko, Jean-François Morin, Al Krinker, Joel Kotarski,
+Markus Beckmann, Christopher Bailey, Viton Vitanis, Paolo Freuli, Tomo
+Helman, Marcello Seri, Maciej Drozdzowski, Cicero Zandona, Barnaby
+Norman, Frances Buontempo, Glenn Swonk, and Sergio Fernandez Gonzalez.</p>
+</div>
+<div class="paragraph">
+<p>Thank you also to all the Manning Early Access Program (MEAP) readers
+who contributed their thoughts, corrections, and questions on the
+Manning Forum, and to Aruna Surya for providing feedback via email.</p>
+</div>
+<div class="paragraph">
+<p>If I left someone out, I’m terribly sorry; thank you, too.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_about_this_book">About this book</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The primary goal of this book is for you to be able to decide for
+yourself whether you trust Bitcoin. On the way to that goal, you’ll
+learn a number of Bitcoin concepts—such as digital signatures, proof of
+work, and peer-to-peer networks—on a pretty deep level. Some secondary
+goals fall out naturally:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Install and use a Bitcoin wallet on your phone and understand what
+you’re doing.</p>
+</li>
+<li>
+<p>Engage in technical Bitcoin discussions.</p>
+</li>
+<li>
+<p>Make informed decisions about how to store your private keys depending
+on the number of bitcoins stored and the required level of security and
+convenience.</p>
+</li>
+<li>
+<p>Run a full Bitcoin node to engage in financial transactions without
+trusting a third party.</p>
+</li>
+<li>
+<p>See through extraordinary claims made by scammers, deceivers, and conmen
+who are piggybacking on Bitcoin’s success. Be careful out there!</p>
+</li>
+</ul>
+</div>
+<div class="sect2">
+<h3 id="_who_should_read_this_book">Who should read this book</h3>
+<div class="paragraph">
+<p>This book is intended for technically interested people who want to
+understand Bitcoin on a deep technical level. The book doesn’t require
+any programming skills, but a basic understanding of some technical
+concepts is beneficial—for example, databases, computer networks,
+computer programs, and web servers. A little math background can be
+useful too, but it’s certainly not required.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_how_this_book_is_organized_a_roadmap">How this book is organized: A roadmap</h3>
+<div class="paragraph">
+<p>This book consists of 11 chapters and 3 appendices:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="#ch01">[ch01]</a> is an overview of Bitcoin. You’ll learn what Bitcoin is, why
+it matters, and roughly how it operates.</p>
+</li>
+<li>
+<p><a href="#ch02">[ch02]</a> discusses cryptographic hash functions and digital signatures.
+These are the fundamental building blocks needed for the rest of this
+book. I also lay the groundwork for a fictive money system, the cookie
+token spreadsheet, that we’ll build on in chapters 2–8.</p>
+</li>
+<li>
+<p><a href="#ch03">[ch03]</a> covers addresses. When you send bitcoins, you send them to the
+recipient’s Bitcoin address. What are Bitcoin addresses, why are they
+needed, and how are they created and used?</p>
+</li>
+<li>
+<p><a href="#ch04">[ch04]</a> goes through how a Bitcoin wallet keeps track of your secret
+keys and how multiple secret keys can be generated from a single huge
+random number called a seed. Backups are also discussed in detail.</p>
+</li>
+<li>
+<p><a href="#ch05">[ch05]</a> explores the anatomy of a Bitcoin transaction and how
+transactions are digitally signed and processed.</p>
+</li>
+<li>
+<p><a href="#ch06">[ch06]</a> discusses the blockchain: the database where transactions are
+stored. We walk through how the blockchain is structured and how it
+enables the use of so-called lightweight wallets.</p>
+</li>
+<li>
+<p><a href="#ch07">[ch07]</a> covers proof of work, which is used to select who gets to add
+new transactions to the blockchain. This process, called mining, is what
+keeps your bitcoins secure in the blockchain.</p>
+</li>
+<li>
+<p><a href="#ch08">[ch08]</a> explores the Bitcoin network. Bitcoin has no central point of
+control, and you’ll see how that’s possible with a peer-to-peer network.
+I also explain how to take active part in the Bitcoin network by running
+your own node.</p>
+</li>
+<li>
+<p><a href="#ch09">[ch09]</a> revisits transactions. We circle back to discover some bells
+and whistles that are important for various applications.</p>
+</li>
+<li>
+<p><a href="#ch10">[ch10]</a> introduces segregated witness. Bitcoin was upgraded with
+major improvements to transaction reliability, verification efficiency,
+and blockchain capacity in 2017, and this chapter gives you all the
+details.</p>
+</li>
+<li>
+<p><a href="#ch11">[ch11]</a> goes through soft forks and hard forks and how Bitcoin can be
+safely upgraded using a soft fork together with a careful deployment
+plan.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>I suggest that you read chapters 2–8, where we’ll build the cookie token
+system from the ground up, sequentially. Each chapter adds a technology
+to the system to solve a specific problem, and by chapter 8, we’ll have
+built Bitcoin. Chapters 9, 10, and 11 can be read out of order, but I
+recommend reading chapter 11 carefully, because it covers the essence of
+Bitcoin. If you get chapter 11, you’re grokking Bitcoin.</p>
+</div>
+<div class="sidebarblock">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="style/images/periscope.svg" alt="periscope">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>I reuse some overview figures from <a href="#ch01">[ch01]</a> every now and then
+throughout the book to help you with orientation, both in chapter
+intros and embedded in the chapters. It’s easy to lose track of the
+big picture and the goal of the current topic; look for the periscope
+and section headers like “Where were we?”</p>
+</div>
+<div class="paragraph">
+<p>Each chapter, except <a href="#ch01">[ch01]</a>, contains exercises. They’re there for
+you to assess your skills. Each batch of exercises is divided into an
+easier section called “Warm up,” used for shorter fact checks; and a
+tougher section, “Dig in,” that requires more thinking. Some of the
+exercises in the “Dig in” sections are dreadfully difficult, so if you
+get stuck, please consult <a href="#app2">[app2]</a> for answers.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_code_conventions">Code conventions</h3>
+<div class="paragraph">
+<p>There’s not much code in this book. None, actually. But there are some
+Linux commands in <a href="#ch08">[ch08]</a> and <a href="#app1">[app1]</a>. A command is prefixed by a
+dollar sign and a space, as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ cd ~/.bitcoin</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>When a command is too long to fit on a single line, we break the line
+with a backslash <code>\</code> and indent the next line by four characters, as
+follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ ./bitcoin-cli getrawtransaction \
+    30bca6feaf58b811c1c36a65c287f4bd393770c23a4cc63c0be00f28f62ef170 1</pre>
+</div>
+</div>
+<div class="paragraph movingtarget">
+<p>Backslashes can be used to write commands across multiple lines in
+most Linux command-line interpreters, so you can copy and paste such
+commands into your terminal. Lines of output from commands aren’t
+broken with backslashes; they’re instead wrapped as needed using a
+line break arrow as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>{"result":"000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", "error":null,"id":"1"}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Throughout the book, data is written in a <code>fixed-width</code> font: for
+example, <code>7af24c99</code>. I usually don’t explicitly write out what encoding
+is used (decimal numbers, hexadecimal strings, base64 strings, base58
+strings, and so forth), because it’s often obvious from the context.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_livebook_discussion_forum">liveBook discussion forum</h3>
+<div class="paragraph">
+<p>Purchase of <em>Grokking Bitcoin</em> includes free access to a private web
+forum run by Manning Publications where you can make comments about
+the book, ask technical questions, and receive help from the author
+and from other users. To access the forum, go to
+<a href="https://livebook.manning.com/#!/book/grokking-bitcoin/discussion" class="bare">https://livebook.manning.com/#!/book/grokking-bitcoin/discussion</a>. You
+can also learn more about Manning’s forums and the rules of conduct at
+<a href="https://livebook.manning.com/#!/discussion" class="bare">https://livebook.manning.com/#!/discussion</a>.</p>
+</div>
+<div class="paragraph">
+<p>Manning’s commitment to our readers is to provide a venue where a
+meaningful dialogue between individual readers, and between readers and
+the author can take place. It is not a commitment to any specific amount
+of participation on the part of the author, whose contribution to the
+forum remains voluntary (and unpaid). We suggest you try asking the
+author some challenging questions lest his interest stray! The forum and
+the archives of previous discussions will be accessible from the
+publisher’s website as long as the book is in print.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_other_author_resources">Other author resources</h3>
+<div class="paragraph">
+<p>If you have specific questions about Bitcoin that you didn’t find the
+answer to in this book, I recommend Bitcoin Stack Exchange
+(<a href="#web-stackexchange">[web-stackexchange]</a>), which is a platform for questions and answers
+where good answers are up-voted by readers.</p>
+</div>
+<div class="paragraph">
+<p>I also recommend the Bitcoin Developer Reference (<a href="#web-dev-ref">[web-dev-ref]</a>),
+for more comprehensive documentation of Bitcoin.</p>
+</div>
+<div class="paragraph">
+<p>The Bitcoin Core source code (<a href="#web-bitcoin-source">[web-bitcoin-source]</a>) is the most
+accurate source of information. It’s the reference implementation of
+the Bitcoin protocol, and reading that source code is sometimes the
+only way to find answers to questions.</p>
+</div>
+<div class="paragraph">
+<p>If you want to search the contents of this book online, I recommend
+working with the source code available at <a href="#web-book-source">[web-book-source]</a>. It will
+be released at the latest 90 days after the book is published.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_about_the_author">About the author</h2>
+<div class="sectionbody">
+<div class="sidebarblock">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/fm/kalle.jpg" alt="kalle">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Kalle Rosenbaum has worked as a software developer for 20 years. His
+passion for Bitcoin began in 2013 and has continued uninterrupted. Kalle
+started a Bitcoin consultancy company in 2015 and has worked in the
+Bitcoin industry since then. He also writes a technical blog that
+explains various technical Bitcoin topics, such as block-propagation
+improvements, sidechains, and replace-by-fee. The purpose of the blog is
+to teach himself and let others benefit, too.</p>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2021-05-19 10:45:14 +0200
+</div>
+</div>
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  messageStyle: "none",
+  tex2jax: {
+    inlineMath: [["\\(", "\\)"]],
+    displayMath: [["\\[", "\\]"]],
+    ignoreClass: "nostem|nolatexmath"
+  },
+  asciimath2jax: {
+    delimiters: [["\\$", "\\$"]],
+    ignoreClass: "nostem|noasciimath"
+  },
+  TeX: { equationNumbers: { autoNumber: "none" } }
+})
+MathJax.Hub.Register.StartupHook("AsciiMath Jax Ready", function () {
+  MathJax.InputJax.AsciiMath.postfilterHooks.Add(function (data, node) {
+    if ((node = data.script.parentNode) && (node = node.parentNode) && node.classList.contains("stemblock")) {
+      data.math.root.display = "block"
+    }
+    return data
+  })
+})
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_HTMLorMML"></script>
+</body>
+</html>

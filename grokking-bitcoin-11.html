@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 2.0.15">
+<meta name="author" content="Kalle Rosenbaum">
+<title>Grokking Bitcoin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
+<link rel="stylesheet" href="style/asciidoctor.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="style/grokking-bitcoin.css">
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  messageStyle: "none",
+  tex2jax: {
+    inlineMath: [["\\(", "\\)"]],
+    displayMath: [["\\[", "\\]"]],
+    ignoreClass: "nostem|nolatexmath"
+  },
+  asciimath2jax: {
+    delimiters: [["\\$", "\\$"]],
+    ignoreClass: "nostem|noasciimath"
+  },
+  TeX: { equationNumbers: { autoNumber: "none" } }
+});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_HTMLorMML"></script>
+</head>
+<body class="book toc2 toc-left">
+<div id="header">
+<h1>Grokking Bitcoin</h1>
+<div class="details">
+<span id="author" class="author">Kalle Rosenbaum</span><br>
+</div>
+<div id="toc" class="toc2">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#ch11">11. Bitcoin upgrades</a>
+<ul class="sectlevel2">
+<li><a href="#bitcoin-forks">11.1. Bitcoin forks</a>
+<ul class="sectlevel3">
+<li><a href="#_nonconsensus_rule_changes">11.1.1. Nonconsensus rule changes</a></li>
+<li><a href="#_hard_forks">11.1.2. Hard forks</a></li>
+<li><a href="#_soft_forks">11.1.3. Soft forks</a></li>
+<li><a href="#_differences_between_hard_and_soft_forks">11.1.4. Differences between hard and soft forks</a></li>
+</ul>
+</li>
+<li><a href="#_transaction_replay">11.2. Transaction replay</a>
+<ul class="sectlevel3">
+<li><a href="#replay-protection">11.2.1. Replay protection</a></li>
+</ul>
+</li>
+<li><a href="#deployment-mechanisms">11.3. Upgrade mechanisms</a>
+<ul class="sectlevel3">
+<li><a href="#_using_coinbase_signalingbip16">11.3.1. Using coinbase signaling—BIP16</a></li>
+<li><a href="#_using_incremented_block_version_number_signalingbip34_66_and_65">11.3.2. Using incremented block version number signaling—BIP34, 66, and 65</a></li>
+<li><a href="#_using_block_version_bits_signalingbip9">11.3.3. Using block version bits signaling—BIP9</a></li>
+<li><a href="#_using_bip9_to_deploy_relative_lock_time">11.3.4. Using BIP9 to deploy relative lock time</a></li>
+<li><a href="#_using_bip9_to_deploy_segwit">11.3.5. Using BIP9 to deploy segwit</a></li>
+<li><a href="#_user_activated_soft_forks">11.3.6. User-activated soft forks</a></li>
+</ul>
+</li>
+<li><a href="#_recap">11.4. Recap</a></li>
+<li><a href="#_exercises">11.5. Exercises</a>
+<ul class="sectlevel3">
+<li><a href="#_warm_up">11.5.1. Warm up</a></li>
+<li><a href="#_dig_in">11.5.2. Dig in</a></li>
+</ul>
+</li>
+<li><a href="#_summary">11.6. Summary</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="ch11">11. Bitcoin upgrades</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This chapter covers</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Understanding hard forks and soft forks</p>
+</li>
+<li>
+<p>Upgrading Bitcoin safely</p>
+</li>
+<li>
+<p>Understanding that users make the rules</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>To understand this chapter, you should be comfortable with concepts
+like the blockchain (<a href="#ch06">[ch06]</a>), proof of work (<a href="#ch07">[ch07]</a>), and the
+peer-to-peer network (<a href="#ch08">[ch08]</a>). If you had difficulties with those
+chapters, I suggest you revisit them before continuing with this
+chapter. Of course, you can also just try to read on anyway.</p>
+</div>
+<div class="paragraph">
+<p>Bitcoin’s consensus rules can change in two ways: via either a soft fork
+or via a hard fork. These two types of changes are fundamentally
+different. In <a href="#bitcoin-forks">Section 11.1</a>, you’ll learn about the differences
+between hard and soft forks and about what happens when different nodes
+run different consensus rules. You’ll need to understand this before
+learning how to safely upgrade Bitcoin’s consensus rules..</p>
+</div>
+<div class="paragraph">
+<p>Rolling out a consensus rule change over the Bitcoin network can be
+difficult. Each Bitcoin node is sovereign, and no one dictates what
+software people should run—users decide for themselves. This makes it
+hard to roll out, or <em>deploy</em>, consensus rule changes without having
+broad user and miner support. The <em>deployment mechanisms</em> have evolved
+over time, and we’ll go through this evolution and explore the current
+state of deployment mechanisms.</p>
+</div>
+<div class="paragraph">
+<p>As of this writing, most (noncritical) updates to Bitcoin’s consensus
+rules have been made via <em>miner-activated soft forks</em>, in which miners
+signal support and eventually start enforcing the new rules. But this
+approach presents some issues—for example, a big miner can veto an
+upgrade despite broad user adoption. People are looking to solve this
+with <em>user-activated soft forks</em>. This means power is where power
+belongs: with the people using Bitcoin, the <em>economic majority</em>. It’s
+the economic majority that ultimately and collectively decides the
+consensus rules, and this insight is put into practice with
+user-activated soft forks.</p>
+</div>
+<div class="sect2">
+<h3 id="bitcoin-forks">11.1. Bitcoin forks</h3>
+<div class="paragraph">
+<p><em>Open source</em> software is software that you’re free to download, use,
+inspect, change, and redistribute as you please. A lot of the software
+you use on a daily basis is probably open source. Maybe you use the
+Google Chrome web browser or an Android mobile phone. These are examples
+of software built on open source projects.</p>
+</div>
+<div class="paragraph">
+<p>Open source projects can be <em>forked</em>. If you make a copy of the source
+code for Linux, make some changes to it, and distribute your new version
+of the Linux source code, you have created a <em>fork</em> of the project.</p>
+</div>
+<div class="paragraph">
+<p>Bitcoin is an open source project that can be forked just like any other
+open source project, such as Linux. But in this book, <em>fork</em> will mean
+something different.</p>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Differing definitions</div>
+<div class="paragraph">
+<p>People define the term <em>fork</em> in different ways. In this book, I use
+the definition that I find best, which is “a change in the consensus
+rules.”</p>
+</div>
+</div>
+</div>
+<div class="paragraph important">
+<p>In the Bitcoin context, the term <em>fork</em> means a change in the
+consensus rules. The consensus rules define what a valid blockchain is.
+When some set of nodes uses the same consensus rules, consensus emerges
+among them about what the current unspent transaction output (UTXO)
+set—“who owns what”—is. In short, a fork changes the definition of a
+valid blockchain.</p>
+</div>
+<div class="paragraph">
+<p>For example, the rule that limits the block weight to 4,000,000 WU is a
+consensus rule. Changing that limit would be a fork. But a relay policy
+that prevents transactions with tiny fees from being relayed isn’t part
+of the consensus rules. Changing that policy isn’t a fork.</p>
+</div>
+<div class="paragraph">
+<p>You can change the consensus rules in Bitcoin Core, in a copied version
+of Bitcoin Core, or in any alternative Bitcoin full-node software
+program. If someone runs your modified program, that person is running a
+fork.</p>
+</div>
+<div class="paragraph">
+<p>We generally categorize forks in Bitcoin as follows (<a href="#fig1101">Figure 1</a>):</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Hard forks</dt>
+<dd>
+<p>A hard fork relaxes the consensus rules. Some blocks that
+was considered invalid by Old nodes, will be considered valid by New
+nodes. Doubling the maximum allowed block weight would be a hard fork.</p>
+</dd>
+<dt class="hdlist1">Soft forks</dt>
+<dd>
+<p>A soft fork tightens the consensus rules. All blocks that
+New nodes consider valid will also be considered valid by Old nodes,
+but some blocks considered valid by Old nodes will be considered
+<em>invalid</em> by New nodes. Reducing the maximum allowed block weight
+would be a soft fork.</p>
+</dd>
+</dl>
+</div>
+<div id="fig1101" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-01.svg" alt="11 01" width="75%">
+</div>
+<div class="title">Figure 1. Soft forks tighten the consensus rules, whereas hard forks widen them—for example, decreasing the maximum block weight or increasing it, respectively.</div>
+</div>
+<div class="paragraph">
+<p>Changes that don’t change the consensus rules, such as modifying the
+color of the graphical user interface or adding a new feature to the
+peer-to-peer networking protocol, aren’t Bitcoin forks. But they could
+be considered forks of a software project in the traditional sense. From
+now on, I’ll use the term <em>fork</em> only to mean a change of consensus
+rules.</p>
+</div>
+<div class="sidebarblock bigside">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-01.svg" alt="u11 01">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>As an analogy for soft and hard forks, imagine a popular vegetarian
+restaurant where lots of vegetarians go to eat. This restaurant has only
+one dish on its menu. Think of the restaurant as a miner, the guests as
+full nodes, and the meals served as blocks. The restaurant produces
+meals that guests eat—the miner produces blocks that full nodes accept.</p>
+</div>
+<div class="paragraph">
+<p>Imagine that the restaurant changes its dish, as <a href="#tab1101">Table 1</a> shows.</p>
+</div>
+<table id="tab1101" class="tableblock frame-all grid-all fit-content">
+<caption class="title">Table 1. The restaurant can make a hard fork by adding meat to its dish or a soft fork by restricting the food to vegan.</caption>
+<colgroup>
+<col>
+<col>
+<col>
+<col>
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Vegetarian restaurant serves …</th>
+<th class="tableblock halign-left valign-top">Will guests accept it?</th>
+<th class="tableblock halign-left valign-top">Fork type</th>
+<th class="tableblock halign-left valign-top">Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Vegetarian food</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Yes</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">None</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Vegetarians eat vegetarian food.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Nonvegetarian food</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">no</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Hard fork</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The rules are <em>relaxed</em>. Vegetarians can’t eat here any more.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Vegan food</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Yes</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Soft fork</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The rules are <em>tightened</em>. Vegetarian rules still apply.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>If you create a fork, soft or hard, you risk having a chain split if
+anyone runs your forked computer program. Some nodes will follow the
+strongest chain that’s valid according to the old rules, and some
+nodes—those running your software—will follow the strongest chain that’s
+valid according to your new rules. The result might be a split in the
+blockchain.</p>
+</div>
+<div class="paragraph">
+<p>We’ll work through a few examples to illustrate what happens in
+different scenarios. We’ll start with the simplest case: a change that
+doesn’t affect the consensus rules. The name <em>Bitcoin Old</em> will refer to
+the previous version of the program, and <em>Bitcoin New</em> will refer to the
+changed version of the program. A node running Bitcoin Old is called an
+<em>Old node</em>, and a <em>New node</em> is a node running Bitcoin New. We’ll
+denote data—for example, a block—created by a New node as <em>a New
+block</em>. Similarly, a transaction created by an Old node will be denoted
+as an <em>Old transaction</em>.</p>
+</div>
+<div class="sect3">
+<h4 id="_nonconsensus_rule_changes">11.1.1. Nonconsensus rule changes</h4>
+<div class="paragraph">
+<p>Suppose you want to add a new “feature” to Bitcoin Core’s networking
+code. You want to add a new network message type called <code>kill</code> that one
+Bitcoin node can send to another Bitcoin node. This message’s recipient
+node will immediately shut itself down. Only New nodes will know how to
+deal with an incoming <code>kill</code> message. Old nodes will ignore the—for
+them—unknown message (<a href="#fig1102">Figure 2</a>).</p>
+</div>
+<div id="fig1102" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-02.svg" alt="11 02" width="75%">
+</div>
+<div class="title">Figure 2. Your new message will be accepted by New nodes and ignored by Old nodes.</div>
+</div>
+<div class="paragraph">
+<p>Most people consider your change a huge security risk. They don’t want
+their nodes shut down by a random stranger on the internet. You’ll
+have a hard time convincing them to use Bitcoin New. You can’t force
+this software on anyone; people will have to actively want it and
+install it for Bitcoin New to get network-wide adoption.</p>
+</div>
+<div class="paragraph">
+<p>Stupid changes like the <code>kill</code> message won’t make it in the world of
+open source.</p>
+</div>
+<div class="sect4">
+<h5 id="_making_something_useful_instead">Making something useful instead</h5>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">BIP152</div>
+<div class="paragraph">
+<p>This was implemented in Bitcoin Core in 2016 and greatly improved the
+block-propagation time in the Bitcoin network. BIP152, “Compact Block
+Relay,” describes this in detail. I describe only a simplified version
+here.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Suppose you invent something useful instead: <em>compact blocks</em>. Compact
+blocks let a peer send a block to another peer, but without sending the
+full block. Instead, this technique uses the fact that the recipient
+node has already received most of the transactions in the block.
+Remember that a transaction first travels the network during transaction
+propagation, then travels the network again during block propagation
+once the transaction is confirmed.</p>
+</div>
+<div class="paragraph">
+<p>When Rashid sends a block to Qi (<a href="#fig1103">Figure 3</a>), wouldn’t it be great if
+the block didn’t have to contain the transactions Qi already has?
+Bandwidth requirements would drop dramatically.</p>
+</div>
+<div id="fig1103" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-03.svg" alt="11 03" width="75%">
+</div>
+<div class="title">Figure 3. Qi gets a transaction twice: first during transaction propagation, and then during block propagation.</div>
+</div>
+<div class="paragraph">
+<p>Rashid can instead send just the block header and a list of txids
+(<a href="#fig1104">Figure 4</a>). Qi can then reconstruct the block from the transactions
+she already has in memory and the message from Rashid. In case Qi
+doesn’t have one of the transactions, she’ll request them from Rashid.</p>
+</div>
+<div id="fig1104" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-04.svg" alt="11 04" width="75%">
+</div>
+<div class="title">Figure 4. Compact blocks in action. Rashid sends just the necessary data to Qi.</div>
+</div>
+<div class="paragraph">
+<p>The protocol starts with Rashid sending Qi a <code>cmpctblock</code> message. Qi
+will use this message to re-create the block using the transactions she
+already has in memory. If she succeeds, she’s done and can start
+verifying the block. If she’s missing some transactions, she’ll request
+them from Rashid using a <code>getblocktxn</code> message containing a list of
+those transactions’ indexes. Rashid will then reply with a <code>blocktxn</code>
+message containing the missing transactions.</p>
+</div>
+<div class="paragraph">
+<p>Note that this is a simplified version of how it actually works. The
+main differences are as follows:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The <code>cmpctblock</code> message can also include some complete transactions—for
+example, the block’s coinbase transaction.</p>
+</li>
+<li>
+<p>Compact blocks can work in two different modes:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>In high-bandwidth mode, <code>cmpctblock</code> messages are sent unsolicited
+instead of first using an <code>inv</code> or <code>headers</code>.</p>
+</li>
+<li>
+<p>In low-bandwidth mode, the <code>cmpctblock</code> is sent only on request after an
+<code>inv</code> or <code>headers</code> has been received.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>The list of txids sent in the <code>cmpctblock</code> messages aren’t full txids,
+but shortened versions to save data traffic. They’re still long enough
+to almost always uniquely identify the actual transactions used.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>This is a really useful change that many people find valuable. You
+release your software, and people start using it. Not everybody has to
+upgrade to this version. If only one of your peers uses it, you’ll
+benefit by running it yourself because the bandwidth requirements
+between you and that one peer will decrease. As more and more nodes
+start adopting compact blocks, your total bandwidth requirement will
+drop even more.</p>
+</div>
+<div class="paragraph">
+<p>You haven’t made any changes to the consensus rules. Blocks are
+verified using your software exactly as before. Old nodes will accept
+New blocks and vice versa.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_hard_forks">11.1.2. Hard forks</h4>
+<div class="sidebarblock bigside">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-02.svg" alt="u11 02">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>As described in <a href="#bitcoin-forks">Section 11.1</a>, a hard fork is a software change that
+relaxes the consensus rules. New blocks, created by New nodes, might be
+rejected by Old nodes. In the example with the vegetarian restaurant, a
+hard fork would be when the vegetarian restaurant starts to serve meat.</p>
+</div>
+<div class="paragraph">
+<p>Suppose you create a fork that changes the maximum allowed block
+weight—discussed in <a href="#increasing-the-block-size-limit">[increasing-the-block-size-limit]</a>—from 4,000,000
+WU to 8,000,000 WU. This would allow for more transactions to be
+stuffed into each block. On the other hand, a higher limit could
+negatively affect some nodes in the Bitcoin network, as we talked
+about in <a href="#ch10">[ch10]</a>.</p>
+</div>
+<div class="paragraph">
+<p>Anyhow, you make this change and start using it in the Bitcoin network.
+When your node receives a block from a Bitcoin Old node, you’ll accept
+it because the block is definitely ≤ 8,000,000 WU; the Old node won’t
+create or relay blocks larger than 4,000,000 WU.</p>
+</div>
+<div class="paragraph">
+<p>Suppose you’re a miner running Bitcoin New. You’re lucky enough to find
+a valid proof of work, and you publish your block. This block will
+definitely be ≤ 8,000,000 WU, but it might or might not be ≤ 4,000,000
+WU. If it is ≤ 4,000,000 WU, it will be accepted by Old nodes. But if
+not, Old nodes will reject your block. Your blockchain will diverge from
+the Bitcoin Old blockchain. You’ve caused a blockchain split (<a href="#fig1105">Figure 5</a>).</p>
+</div>
+<div id="fig1105" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-05.svg" alt="11 05" width="100%">
+</div>
+<div class="title">Figure 5. Your node running Bitcoin New is a loser against the Bitcoin Old nodes. Bitcoin Old will discard all of your blocks that violate the ≤ 4,000,000 WU rule.</div>
+</div>
+<div class="paragraph">
+<p>When your New node mines a new block, it might get rejected by the Old
+nodes, depending on whether it’s ≤ 4,000,000 WU. For the blocks that are
+rejected, you’ll have wasted a lot of electricity and time mining blocks
+that don’t make it into the main chain.</p>
+</div>
+<div class="paragraph">
+<p>But suppose a majority of the hashrate likes your Bitcoin New program
+and starts using it instead of Bitcoin Old. What happens then? Let’s see
+how it plays out (<a href="#fig1106">Figure 6</a>).</p>
+</div>
+<div class="paragraph">
+<p>When a New node mines a big block, all New nodes will try to extend that
+block, but all Old nodes will keep on trying to extend the latest—valid,
+according to Old rules—block.</p>
+</div>
+<div id="fig1106" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-06.svg" alt="11 06" width="75%">
+</div>
+<div class="title">Figure 6. A majority of the hashrate runs Bitcoin New. It seems to have caused a permanent chain split.</div>
+</div>
+<div class="paragraph">
+<p>New nodes win more blocks over time than Old nodes because they
+collectively have more hashrate than Old nodes. It seems like the New
+nodes’ branch will stay intact because it gets a reassuring lead in
+accumulated proof of work.</p>
+</div>
+<div class="paragraph">
+<p>New nodes have apparently created a lasting chain split. But if some
+miners decide to go back to running Bitcoin Old, or if additional
+miners enter the race using Old nodes so that Old gets a majority of
+the hashrate again, the New chain might face problems, as <a href="#fig1107">Figure 7</a>
+shows.</p>
+</div>
+<div id="fig1107" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-07.svg" alt="11 07" width="100%">
+</div>
+<div class="title">Figure 7. The Bitcoin New chain is wiped out because the Bitcoin Old chain becomes stronger.</div>
+</div>
+<div class="paragraph">
+<p>When Old nodes have a hashrate majority, they will outperform the New
+nodes and eventually catch up with the New nodes and surpass them. New
+nodes acknowledge this fact by switching back to mining on the Old
+chain. We say that the branch created by the New nodes was wiped out by
+a chain reorganization, commonly known as a <em>reorg</em>.</p>
+</div>
+<div class="sect4">
+<h5 id="_wipeout_protection">Wipeout protection</h5>
+<div class="paragraph">
+<p>Blocks created by Old nodes in the hard fork just described are always
+compatible with New nodes. This means there is a risk for a reorg of the
+New chain.</p>
+</div>
+<div class="paragraph">
+<p>This isn’t the case with all hard forks. Suppose, for example, that you
+want to change the proof of work hash function from double SHA256 to
+single SHA256. Your New blocks will always be rejected by Old nodes;
+and, conversely, Old blocks will always be rejected by New nodes. A
+change like this is therefore guaranteed to avoid a reorg by the Old
+branch. It’s wipeout-protected by nature—but many changes aren’t.</p>
+</div>
+<div class="paragraph">
+<p>An example of a change that isn’t wipeout-protected by nature is an
+alternative cryptocurrency called <em>Bitcoin Cash</em>. It was created
+through a hard fork of Bitcoin Core at block height 478559 on 1 August
+2017. The main thing Bitcoin Cash did was increase the maximum base
+block size and remove segwit from the code. This made the Old chain
+compatible with New nodes and vulnerable to wipeout. To protect against
+Bitcoin New being wiped out in a reorg, Bitcoin Cash added <em>wipeout
+protection</em> by requiring the first block of the split to be bigger than
+1,000,000 bytes (1 MB). See <a href="#fig1108">Figure 8</a>.</p>
+</div>
+<div id="fig1108" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-08.svg" alt="11 08" width="75%">
+</div>
+<div class="title">Figure 8. Bitcoin Cash protects against wipeout by requiring the first block after the chain split to be &gt;1 MB.</div>
+</div>
+<div class="paragraph">
+<p>The result is that Bitcoin New nodes <em>cannot</em> move back to the Bitcoin
+Old branch because that branch has a block less than or equal to 1 MB at
+height 478559.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_soft_forks">11.1.3. Soft forks</h4>
+<div class="sidebarblock bigside">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-03.svg" alt="u11 03">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>We’ve discussed soft forks several times throughout this book. A soft
+fork is a change in the consensus rules in which New blocks are accepted
+by Old nodes. The consensus rules are tightened. In the case with the
+vegetarian restaurant, a soft fork would be when the restaurant changes
+its food to vegan.</p>
+</div>
+<div class="paragraph">
+<p>Segwit is an example of a soft fork. The change was carefully designed
+so that Old nodes won’t fail in verifying blocks that contain segwit
+transactions. All Old nodes will accept any valid New blocks and
+incorporate them into the blockchain.</p>
+</div>
+<div class="paragraph">
+<p>On the other hand, an Old node <em>could</em> create a block that isn’t valid
+according to Bitcoin New. For example, a non-segwit miner could include
+in its block a transaction that spends a segwit output as if it were an
+anyone-can-spend output (<a href="#fig1109">Figure 9</a>).</p>
+</div>
+<div id="fig1109" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-09.svg" alt="11 09" width="100%">
+</div>
+<div class="title">Figure 9. An Old miner regards a segwit output as anyone-can-spend and adds to the block a transaction that spends it as such.</div>
+</div>
+<div class="paragraph">
+<p>Suppose there is only a single miner with a small hashrate running
+Bitcoin New. Also assume that the Old miners produce a block that’s
+invalid according to New nodes, as in the earlier example with the
+non-segwit transaction. The result would be that the Old nodes build a
+block that’s not accepted by the New miner. The New miner would reject
+the invalid Old block. This is the point where the blockchain splits in
+two (<a href="#fig1110">Figure 10</a>).</p>
+</div>
+<div id="fig1110" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-10.svg" alt="11 10" width="75%">
+</div>
+<div class="title">Figure 10. The soft fork might cause a chain split if the Bitcoin Old nodes produce a block that Bitcoin New miners don’t accept.</div>
+</div>
+<div class="paragraph">
+<p>In this situation, the Old chain is at risk of being wiped out by a
+reorg. Suppose more miners decide to upgrade to Bitcoin New, causing a
+hashrate majority to support the New blockchain. After a while, we’ll
+probably see a reorg (<a href="#fig1111">Figure 11</a>).</p>
+</div>
+<div id="fig1111" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-11.svg" alt="11 11" width="100%">
+</div>
+<div class="title">Figure 11. As people adopt Bitcoin New, the branch will cause a reorg for Old nodes.</div>
+</div>
+<div class="paragraph">
+<p>The Bitcoin New branch will become the stronger branch, so the remaining
+Old miners will abandon their branch and start working on the same
+branch as the New nodes. But as soon as an Old node creates a block
+that’s invalid on New nodes, it will lose out on the block reward
+because it won’t be accepted on the New branch.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_differences_between_hard_and_soft_forks">11.1.4. Differences between hard and soft forks</h4>
+<div class="paragraph">
+<p>Let’s look again at what differentiates soft forks from hard forks, as a
+general rule:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>A hard fork <em>relaxes</em> the rules. Increasing the maximum block weight is
+a hard fork.</p>
+</li>
+<li>
+<p>A soft fork <em>tightens</em> the rules. Segwit is a soft fork.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>This is a simple, yet true, distinction. We can summarize the effects
+of a chain split caused by a hard fork versus a soft fork as follows:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><em>Hard fork</em>—The New branch might get wiped out in a reorg. Use wipeout
+protection to avoid this. The Old branch can’t be wiped out.</p>
+</li>
+<li>
+<p><em>Soft fork</em>—The Old branch might get wiped out in a reorg. You can’t
+protect the Old branch from a wipeout because that would make this fork
+a hard fork. Remember that the definition of a soft fork is that Old
+nodes accept New blocks.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_transaction_replay">11.2. Transaction replay</h3>
+<div class="paragraph">
+<p>Regardless of what causes a chain split, its effects are the same. Users
+end up with two versions of their UTXO: one spendable on the Old chain,
+and one spendable on the New chain. We effectively have two
+cryptocurrencies, Bitcoin Old and Bitcoin New (<a href="#fig1112">Figure 12</a>).</p>
+</div>
+<div id="fig1112" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-12.svg" alt="11 12" width="75%">
+</div>
+<div class="title">Figure 12. After a chain split, you effectively have two versions of your UTXOs.</div>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Value swings</div>
+<div class="paragraph">
+<p>If a chain split occurs, it might have a severe impact on the value of
+the bitcoins on the Old branch. The value per coin on the New branch
+might or might not be known; it depends on whether those coins are
+widely traded yet.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Suppose the chain split in <a href="#fig1112">Figure 12</a> has occurred, and you want to
+pay for a book at an online bookstore. You want to do this using
+Bitcoin Old because that’s what the bookstore wants.</p>
+</div>
+<div class="paragraph">
+<p>You create your transaction and broadcast it. The Old nodes in the
+network will accept your transaction because you spend a UTXO that
+exists on those nodes. But your transaction is <em>also valid on New nodes</em>
+because those nodes have the same UTXOs as well (<a href="#fig1113">Figure 13</a>).</p>
+</div>
+<div id="fig1113" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-13.svg" alt="11 13" width="75%">
+</div>
+<div class="title">Figure 13. Your transaction to the bookstore is valid on both the Bitcoin Old and the Bitcoin New branches.</div>
+</div>
+<div class="paragraph">
+<p>If your transaction propagates to both a New miner and an Old miner, it
+will probably end up in both branches of the blockchain. This isn’t what
+you intended. Your transactions have been <em>replayed</em> on the Bitcoin New
+branch (<a href="#fig1114">Figure 14</a>).</p>
+</div>
+<div id="fig1114" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-14.svg" alt="11 14" width="100%">
+</div>
+<div class="title">Figure 14. Transaction replay causes you to pay in both currencies.</div>
+</div>
+<div class="sect3">
+<h4 id="replay-protection">11.2.1. Replay protection</h4>
+<div class="paragraph">
+<p>To protect users against replay during a chain split due to a hard fork,
+the transaction format on the New chain can be changed in such a way
+that the transaction is valid on at most one branch.</p>
+</div>
+<div class="paragraph">
+<p>When Bitcoin Cash did its chain split, it made sure Old transactions
+weren’t valid on New nodes and New transactions weren’t valid on Old
+nodes (<a href="#fig1115">Figure 15</a>).</p>
+</div>
+<div id="fig1115" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-15.svg" alt="11 15" width="100%">
+</div>
+<div class="title">Figure 15. With replay protection, a transaction is valid on only one of the branches.</div>
+</div>
+<div class="paragraph">
+<p>To achieve this, a transaction on the New branch must use a new
+<code>SIGHASH</code> type, <code>FORKID</code>, in transaction signatures. This type doesn’t
+do anything, but using it makes the transaction invalid on the Old chain
+and valid on the New chain. If a transaction doesn’t use <code>FORKID</code>, the
+transaction is valid on the Old chain and invalid on the New chain.</p>
+</div>
+<div class="paragraph">
+<p>Using a new <code>SIGHASH</code> type for signatures is, of course, not the only
+way to achieve replay protection. Any change that makes transactions
+valid on at most one chain will do. You can, for example, require that
+New transactions subtract <code>1</code> from the input txid. Suppose the UTXO
+you want to spend has this txid:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>6bde18fff1a6d465de1e88b3e84edfe8db7daa1b1f7b8443965f389d8decac<strong>08</strong></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you want to spend the UTXO on the Old chain, you use this hash in
+the input of your transaction. If you want to spend the UTXO on the
+New chain, you use this instead:</p>
+</div>
+<div class="literalblock">
+<div class="content">
+<pre>6bde18fff1a6d465de1e88b3e84edfe8db7daa1b1f7b8443965f389d8decac<strong>07</strong></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that this is just a silly example, not a full-fledged proposal.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="deployment-mechanisms">11.3. Upgrade mechanisms</h3>
+<div class="paragraph">
+<p>All non-urgent upgrades of Bitcoin so far have been made using soft
+forks. Doing a soft fork safely is a hard problem, and the mechanisms
+used to do them have evolved over time.</p>
+</div>
+<div class="paragraph">
+<p>The main worry when doing a soft fork is that the blockchain will split
+in two and stay that way over a significant time period. If this
+happened, we would effectively have two cryptocurrencies.</p>
+</div>
+<div class="paragraph">
+<p>This would cause confusion: Exchanges would need to decide which branch
+they considered to be “Bitcoin” and which branches to support for their
+exchange service. Users would need to be made aware that a split had
+happened so they could avoid sending money on the wrong branch.
+Merchants would have to make sure they charged the currency or
+currencies they intended to. A blockchain split might also cause the
+cryptocurrency value to change dramatically.</p>
+</div>
+<div class="sect3">
+<h4 id="_using_coinbase_signalingbip16">11.3.1. Using coinbase signaling—BIP16</h4>
+<div class="paragraph">
+<p>When p2sh was introduced in 2012, the Bitcoin community had no
+experience in upgrading. It had to come up with a way to avoid a
+blockchain split. The community implemented soft-fork <em>signaling</em>
+using the coinbase. New miners signaled support for p2sh by putting
+the string <code>/P2SH/</code> into the coinbase of the blocks they produced
+(<a href="#fig1116">Figure 16</a>).</p>
+</div>
+<div id="fig1116" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-16.svg" alt="11 16" width="50%">
+</div>
+<div class="title">Figure 16. A miner signals support for p2sh by writing <code>/P2SH/</code> in the coinbase’s signature script.</div>
+</div>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">User-activated soft fork</div>
+<div class="paragraph">
+<p>A deployment method in which users, not just miners, start enforcing
+rules has become known as a <em>user-activated soft fork</em>. We’ll talk
+about this later in this chapter.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>On a specific day, the Bitcoin developers checked if at least 550 of
+the last 1,000 blocks contained <code>/P2SH/</code>. They did, so the
+developers made a new software release that would start enforcing the
+p2sh rules on 1 April 2012, a flag day.</p>
+</div>
+<div class="paragraph">
+<p>This worked out well; miners quickly adopted the soft fork, and the
+entire network upgraded within a reasonable time. No split occurred
+because at least 50% of the hashrate had upgraded prior to the
+flag day.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_using_incremented_block_version_number_signalingbip34_66_and_65">11.3.2. Using incremented block version number signaling—BIP34, 66, and 65</h4>
+<div class="paragraph">
+<p>I haven’t talked about it much before, but the block header comes with a
+version (<a href="#fig1117">Figure 17</a>). This version is encoded in the first 4 bytes
+before the previous block hash.</p>
+</div>
+<div id="fig1117" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-17.svg" alt="11 17" width="50%">
+</div>
+<div class="title">Figure 17. The block header contains a block version. The first blocks used version 1.</div>
+</div>
+<div class="paragraph">
+<p>The version is the only thing missing from our previous block headers.
+This is the actual 80-byte Bitcoin block header:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>4 bytes  version
+32 bytes previous block id
+32 bytes merkle root
+4 bytes  timestamp
+4 bytes  target
+4 bytes  nonce
+
+Total 80 bytes</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The block version can be used to signal support for certain new
+features.</p>
+</div>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">BIP34</div>
+<div class="paragraph">
+<p>This BIP, “Block v2, Height in coinbase,” describes both how to store
+the height in the coinbase and how to deploy the change using version
+numbers.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>The first soft fork deployment using block-version signaling was done
+in 2013. This soft fork added a rule that all new blocks must contain
+the block’s height in their coinbase transaction (<a href="#fig1118">Figure 18</a>).</p>
+</div>
+<div id="fig1118" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-18.svg" alt="11 18" width="75%">
+</div>
+<div class="title">Figure 18. BIP34 requires that all blocks contain the block height in the coinbase.</div>
+</div>
+<div class="paragraph">
+<p>The <em>activation</em> of the soft fork was performed in steps using
+block-version signaling to avoid a blockchain split:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>New miners increase the block version from 1 to 2
+(<a href="#fig1119">Figure 19</a>). Note that this happens gradually as more and more nodes
+switch to Bitcoin New over time.</p>
+<div id="fig1119" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-19.svg" alt="11 19" width="75%">
+</div>
+<div class="title">Figure 19. Miners that run the soft fork signal support for it by increasing their block version.</div>
+</div>
+</li>
+<li>
+<p>Wait until 750 of the last 1,000 blocks have a version of at
+least 2.  When this threshold is reached, the New miners probably have
+about 75% of the hashrate.</p>
+</li>
+<li>
+<p>Start rejecting newly produced version 2 blocks that don’t contain
+the height in the coinbase. These blocks are falsely signaling for
+BIP34.</p>
+</li>
+<li>
+<p>Wait until 950 of the last 1,000 blocks have version ≥2. When this
+happens, the New miners have about 95% of the hashrate.</p>
+</li>
+<li>
+<p>Start rejecting all new blocks with version 1. All miners producing
+version 1 blocks will be losers because 95% of the hashrate rejects
+those blocks. The hope is that miners that still haven’t upgraded will
+do so quickly to avoid losing too much money on mining worthless
+blocks.</p>
+</li>
+</ol>
+</div>
+<div class="sidebarblock">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-04.svg" alt="u11 04">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>During step 1, nothing has changed. Only Bitcoin Old rules are in
+effect. But when 750 of the last 1,000 blocks have version 2, we enter
+the next step. Here, nodes running the soft fork start ensuring that
+every new block of version 2 has the height in the coinbase. If not, the
+block is dropped. One reason is that nodes might be deliberately or
+accidentally using block version 2 for other purposes than this soft
+fork. The 75% rule removes false positives before evaluating the 95%
+rule.</p>
+</div>
+<div class="paragraph">
+<p>From this point, some Old miner <em>could</em> cause a chain split by
+creating a block of version 2 that violates the “height in coinbase”
+rule (<a href="#fig1120">Figure 20</a>).</p>
+</div>
+<div id="fig1120" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-20.svg" alt="11 20" width="75%">
+</div>
+<div class="title">Figure 20. The Old nodes could cause a chain split, but it probably won’t last for long.</div>
+</div>
+<div class="paragraph">
+<p>The Old miners would build on top of that block, whereas the New miners
+would build on top of the previous block. But the New miners
+<em>probably</em>—depending on the amount of “false” version 2 signaling—have
+more hashrate and will outperform the Old miners and wipe out the
+Bitcoin Old branch.</p>
+</div>
+<div class="sidebarblock">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-05.svg" alt="u11 05">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>When a greater portion of the blocks—95% of the last 1,000—signals
+support with version 2 blocks, we enter the last step, step 5. From
+this point forward, all blocks with versions &lt; 2 will be dropped.</p>
+</div>
+<div class="paragraph">
+<p>Why did we go through these stages? It isn’t entirely clear why the
+75% rule was used, but it does remove false positives, as
+described. The deployment might have worked fine with the 95% rule
+only. We won’t explore the rationale behind the 75% rule—just accept
+that it was used for this deployment and a few others. <a href="#tab1102">Table 2</a>
+lists soft forks that were introduced using this mechanism.</p>
+</div>
+<table id="tab1102" class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 2. Features deployed an using incremented block version</caption>
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 25%;">
+<col style="width: 25%;">
+<col style="width: 25%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">BIP</th>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Date</th>
+<th class="tableblock halign-left valign-top">Block version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BIP34</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Block v2, Height in Coinbase</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">March 2013</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BIP66</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Strict DER Encoding</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">July 2015</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">BIP65</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OP_CHECKLOCKTIMEVERIFY</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">December 2015</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The upgrade mechanism just described is called a <em>miner-activated</em> soft
+fork. The miners start enforcing the new rules, and all or most full
+nodes will follow because the New blocks are accepted by both Old and
+New full nodes.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_using_block_version_bits_signalingbip9">11.3.3. Using block version bits signaling—BIP9</h4>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">BIP9</div>
+<div class="paragraph">
+<p>This BIP specifies a standard for how to use the block header’s version
+field to perform multiple simultaneous deployments.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Bitcoin’s developers collected a lot of experience from previous soft
+forks. A few problems needed to be addressed:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>You can only deploy one soft fork at a time.</p>
+</li>
+<li>
+<p>Used block versions can’t be reused for new purposes.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The most annoying problem is that you can’t roll out multiple soft
+forks at once. This is because previous deployment mechanisms, such as
+the one used for BIP34, checked whether a block version was greater
+than or equal to a certain number, for example, 2.</p>
+</div>
+<div class="paragraph">
+<p>Suppose you wanted to deploy both BIP34 and BIP66
+simultaneously. BIP34 would use block version 2, and BIP66 would use
+block version 3. This would mean you couldn’t selectively signal
+support for only BIP66; you’d also have to signal support for BIP34
+because your block’s version 3 is greater than or equal to 2.</p>
+</div>
+<div class="paragraph">
+<p>The developers came up with a bitcoin improvement proposal, BIP9, that
+describes a process for how to deploy several soft forks
+simultaneously.</p>
+</div>
+<div class="paragraph">
+<p>This process also uses the block version, but in a different way. The
+developers decided to change the way block version bytes are
+interpreted. Block versions that have the top 3 bits set to exactly
+<code>001</code> are treated differently.</p>
+</div>
+<div class="paragraph">
+<p>First, all such block versions are greater than 4 because the smallest
+such block version is <code>20000000</code>, which is a lot bigger than
+<code>00000004</code>.  So, blocks using BIP9 will always support the
+already-deployed BIP34, 66, and 65. Good.</p>
+</div>
+<div class="paragraph">
+<p>Next, the 29 bits to the right of the leftmost <code>001</code> bits can be used
+to signal support for at most 29 simultaneous soft forks. Each of the
+29 rightmost version bits can be used to independently deploy a single
+feature or group of features (<a href="#fig1121">Figure 21</a>). If a bit is set to <code>1</code>,
+then the miner that produced the block supports the feature
+represented by that bit number.</p>
+</div>
+<div id="fig1121" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-21.svg" alt="11 21" width="100%">
+</div>
+<div class="title">Figure 21. The block version is treated differently. Each of the right 29 bits can signal for different proposals.</div>
+</div>
+<div class="paragraph">
+<p>Several parameters need to be defined for each deployable feature:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><em>Name</em>—A short but descriptive name for the feature</p>
+</li>
+<li>
+<p><em>Bit</em>—The number of the bit to use for signaling</p>
+</li>
+<li>
+<p><em>Start time</em>—What time to start monitoring for miner support</p>
+</li>
+<li>
+<p><em>Timeout</em>—A time when the deployment will be considered failed</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The deployment goes through a number of <em>states</em> (see <a href="#fig1122">Figure 22</a>). The
+state is updated <em>after each retarget period</em>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>DEFINED</code>—The starting state. It means a retarget hasn’t yet happened
+after the start time.</p>
+</li>
+<li>
+<p><code>STARTED</code>—Wait until at least 1,916 (95%) blocks in the last retarget
+period signal support.</p>
+</li>
+<li>
+<p><code>LOCKED_IN</code>—A grace period to give the remaining nonsignaling miners a
+chance to upgrade. If they don’t, their blocks might be rejected.</p>
+</li>
+</ul>
+</div>
+<div class="sidebarblock gbinfo">
+<div class="content">
+<div class="title">Comparing times</div>
+<div class="paragraph">
+<p>When comparing block times to the start time and timeout, we always
+use median time past, as described in <a href="#timestamp-rules">[timestamp-rules]</a>.</p>
+</div>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>ACTIVE</code>—The new rules are in effect.</p>
+</li>
+<li>
+<p><code>FAILED</code>—The timeout occurred before the deployment got <code>LOCKED_IN</code>. If
+conditions happen simultaneously, timeout has precedence over other
+conditions, such as the 95% rule.</p>
+</li>
+</ul>
+</div>
+<div id="fig1122" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-22.svg" alt="11 22" width="100%">
+</div>
+<div class="title">Figure 22. State transitions happen every 2,016 blocks.</div>
+</div>
+<div class="paragraph">
+<p>When the deployment is <code>ACTIVE</code> or <code>FAILED</code>, the bit used to signal
+support should be reset to <code>0</code> so that it can then be reused for other
+deployments.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_using_bip9_to_deploy_relative_lock_time">11.3.4. Using BIP9 to deploy relative lock time</h4>
+<div class="sidebarblock inbitcoin">
+<div class="content">
+<div class="title">BIPs 68, 112, and 113</div>
+<div class="paragraph">
+<p>This “feature” is actually a group of BIPs that collectively make the
+relative lock time work.</p>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Let’s look at an example of how a deployment using version bits can play
+out. We’ll look at how relative lock time was deployed. The developers
+of this new feature defined the following BIP9 parameters:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>name:       csv
+bit:        0
+start time: 2016-05-01 00:00:00
+timeout:    2017-05-01 00:00:00</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The timeout was one year after the start time, which gave the miners
+about one year to upgrade to the soft fork implementing this feature.</p>
+</div>
+<div class="paragraph">
+<p><a href="#fig1123">Figure 23</a> shows the state transitions that occurred.</p>
+</div>
+<div id="fig1123" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-23.svg" alt="11 23" width="100%">
+</div>
+<div class="title">Figure 23. BIP9 deployment of <code>csv</code>. It went well.</div>
+</div>
+<div class="paragraph">
+<p>This deployment went quickly and smoothly. It took only three retarget
+periods for 95% of the miners to upgrade to the new software.</p>
+</div>
+<div class="paragraph">
+<p>Unfortunately, all deployments aren’t as smooth.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_using_bip9_to_deploy_segwit">11.3.5. Using BIP9 to deploy segwit</h4>
+<div class="sidebarblock">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-06.svg" alt="u11 06">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Segwit, described in <a href="#ch10">[ch10]</a>, also used BIP9 for its deployment, but
+things didn’t work out as anticipated. It started out the same way
+<code>csv</code> deployment did. The parameters selected for this deployment were
+as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>name:       segwit
+bit:        1
+start time: 2016-11-15 00:00:00
+timeout:    2017-11-15 00:00:00</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A new version of Bitcoin Core was released with these segwit
+deployment parameters. Users adopted this new version pretty quickly,
+but for some reason, miners seemed hesitant. The signaling plateaued
+at around 30%, and the deployment process got stuck in the <code>STARTED</code>
+state, as <a href="#fig1124">Figure 24</a> shows.</p>
+</div>
+<div id="fig1124" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-24.svg" alt="11 24" width="100%">
+</div>
+<div class="title">Figure 24. The segwit deployment didn’t proceed as anticipated.</div>
+</div>
+<div class="paragraph">
+<p>The segwit deployment was at risk of failing—entering the <code>FAILED</code> state
+after timeout. If this happens, a whole new deployment cycle must be put
+in place and executed, which could take another year.</p>
+</div>
+<div class="sect4">
+<h5 id="_conflicts_of_interest">Conflicts of interest</h5>
+<div class="sidebarblock">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-07.svg" alt="u11 07">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>Another proposal was discussed in parallel. This proposal was known as
+<em>Segwit2x</em>. It was a proposal to first activate segwit <em>and then</em>
+increase the maximum block weight via a hard fork, in addition to the
+maximum block size increase segwit itself provides. This proposal would
+use BIP9 with version bit 4 to signal support. Bitcoin Core didn’t show
+any interest in this proposal, but the Bitcoin Core software repository
+was copied under the name btc1 by a group of people who used it to
+implement the proposal. The threshold would be 80% of the last 2,016
+blocks to lock in segwit. This proposal got a lot of traction among
+miners.</p>
+</div>
+<div class="paragraph">
+<p>A discrepancy seemed to exist between what full nodes wanted and what
+miners wanted. Rumors and theories floated around about what caused this
+discrepancy. We won’t go into that here, but will stick to what we know.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_a_user_activated_soft_fork">A user-activated soft fork</h5>
+<div class="sidebarblock">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-08.svg" alt="u11 08">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>In the midst of all this, another proposal, BIP148, surfaced that
+would start dropping blocks that didn’t signal bit 1 (segwit) on 1
+August 2017. The effect would be that nodes running BIP148 would
+experience a 100% adoption of BIP141, which would cause BIP141 to lock
+in after at most two retargets. This is what’s known as a
+<em>user-activated soft fork</em>. Users—those running full
+nodes—collectively decide that they’ll start applying new rules, and
+if miners don’t comply, their blocks will be discarded. We’ll talk a
+bit more about user-activated soft forks toward the end of this
+chapter.</p>
+</div>
+<div class="paragraph">
+<p>BIP148 was an attempt at forcing segwit deployment despite hesitant
+miners.</p>
+</div>
+<div class="paragraph">
+<p>Some groups, especially the Bitcoin Core team, thought this proposal
+was too risky. It would cause a chain split if a miner published a
+non-segwit-signalling block. But there was also a group of people
+wanting to move forward with BIP148 regardless. This caused some worry
+in the Bitcoin community.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_a_proposal_to_bridge_the_groups">A proposal to bridge the groups</h5>
+<div class="sidebarblock">
+<div class="content">
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-09.svg" alt="u11 09">
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>We had a stalled segwit deployment, an alternate segwit2x fork coming
+that many miners seemed to want, and a group of impatient users wanting
+to enforce segwit using BIP148.</p>
+</div>
+<div class="paragraph">
+<p>To avoid a timeout of the segwit deployment—which would further delay
+segwit—and to avoid a possible blockchain split by BIP148, and to please
+the segwit2x crowd, a new BIP was written. BIP91 would satisfy all of
+these groups. It would use BIP9 with a custom threshold:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>name:       segsignal
+bit:        4
+start time: 2017-06-01 00:00:00
+timeout:    2017-11-15 00:00:00
+Period:     336 blocks
+Threshold:  269 blocks (80%)
+Ceases to be active when segwit (bit 1) is LOCKED_IN or FAILED.</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This BIP did things a bit differently than normal BIP9 deployments. It
+used a shorter period—336 blocks instead of 2,016 blocks—and a lower
+threshold—80% instead of 95%.</p>
+</div>
+<div class="paragraph">
+<p>While active, this BIP behaved like BIP148. All blocks that didn’t
+signal bit 1 (segwit) were rejected. Note how this was compatible with
+both BIP148 and segwit2x. It signaled using bit 4, the same bit segwit2x
+would use, and it enforced segwit lock-in by rejecting
+non-bit-1-signaling blocks.</p>
+</div>
+<div class="paragraph">
+<p>This BIP wasn’t implemented in Bitcoin Core, but in a copied version of
+Bitcoin Core. This version quickly got broad adoption among miners, and
+on 21 July 2017, the BIP got <code>LOCKED_IN</code>. See <a href="#fig1125">Figure 25</a>.</p>
+</div>
+<div id="fig1125" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-25.svg" alt="11 25" width="100%">
+</div>
+<div class="title">Figure 25. BIP91 updates its state every 336 blocks instead of the usual 2,016. This went quickly.</div>
+</div>
+<div class="paragraph">
+<p>It activated three days after <code>LOCKED_IN</code>. Note that it was mainly
+miners that adopted BIP91. Normal users typically used Bitcoin Core,
+which didn’t implement BIP91.</p>
+</div>
+<div class="paragraph">
+<p>When miners activated BIP91, they started dropping blocks that didn’t
+signal bit 1, which is the bit for the <code>segwit</code> deployment. The result
+was that non-bit-1 blocks didn’t make it into the strongest chain, which
+quickly forced the remaining miners to upgrade to segwit to avoid mining
+invalid blocks.</p>
+</div>
+<div class="paragraph">
+<p>Miners were starting to signal segwit, the original segwit proposal
+using bit 1 for its deployment, and it got <code>LOCKED_IN</code> on 9 August 2017
+and became <code>ACTIVE</code> on 24 August 2017, as <a href="#fig1126">Figure 26</a> shows.</p>
+</div>
+<div id="fig1126" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-26.svg" alt="11 26" width="100%">
+</div>
+<div class="title">Figure 26. Segwit finally activates thanks to BIP91.</div>
+</div>
+<div class="paragraph">
+<p>Normal nonmining users, merchants, and exchanges didn’t have to do
+anything in particular to stay on the strongest chain because their
+software (normal segwit-enabled software) follows the strongest valid
+chain. This meant BIP141 got <code>LOCKED_IN</code> and then <code>ACTIVE</code> for all users
+and miners at the same time.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_lessons_learned">Lessons learned</h5>
+<div class="paragraph">
+<p>The events that occurred during segwit deployment weren’t anticipated.
+Few people thought that miners would refuse to adopt BIP141. Yet that’s
+what happened.</p>
+</div>
+<div class="paragraph">
+<p>It became clear that BIP9 isn’t an ideal way to deploy a soft fork. It
+gives 5% of the hashrate a veto against it. Given that several miners
+each control more than 5% of the total hashrate, any one of those
+individual entities can block a system upgrade.</p>
+</div>
+<div class="paragraph important">
+<p>As noted in <a href="#trust-in-lisa">[trust-in-lisa]</a>, we pay miners to perform correct,
+honest transaction confirmations. We don’t pay them to <em>decide</em> the
+rules, we pay them to <em>follow</em> the rules. The rules are decided
+collectively by everyone, you and me, by running our Bitcoin software
+of choice.</p>
+</div>
+<div class="paragraph">
+<p>Think about that.</p>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_user_activated_soft_forks">11.3.6. User-activated soft forks</h4>
+<div class="paragraph">
+<p>To underscore the importance of the economic majority (you, me, and
+everyone else using Bitcoin), and to avoid having miners vetoing
+proposals that the economic majority wants, people started thinking more
+about user-activated soft forks.</p>
+</div>
+<div class="paragraph">
+<p>Let’s look at a fictitious example of a user-activated soft fork.</p>
+</div>
+<div class="paragraph">
+<p>Suppose 99% of Bitcoin users (end users, exchanges, merchants, and so
+on) want a rule change—for example, smaller blocks—that would be a soft
+fork. Also suppose no miner wants smaller blocks, so they all refuse to
+comply. Assume also that 99% of the nonmining full nodes change their
+software to reject all big blocks after a certain block height.</p>
+</div>
+<div class="paragraph">
+<p>What will happen when that block height passes? Miners that produce big
+blocks will build a blockchain that users will deem invalid (<a href="#fig1127">Figure 27</a>).</p>
+</div>
+<div id="fig1127" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-27.svg" alt="11 27" width="50%">
+</div>
+<div class="title">Figure 27. Users start rejecting big blocks. They see no new valid blocks, but plenty of invalid (too-big) blocks.</div>
+</div>
+<div class="paragraph">
+<p>The value of the block rewards in the “miner” chain will be unknown
+because the exchanges don’t deal with the miner chain. Miners won’t be
+able to exchange their block rewards to pay their electricity bills.
+Even if the electricity provider takes Bitcoin, the miners won’t be able
+to pay with their block rewards because the electricity provider won’t
+accept the miner’s blocks as valid. The electricity provider is also a
+Bitcoin user, remember?</p>
+</div>
+<div class="paragraph">
+<p>But if a single miner decides to comply with users’ demands, the blocks
+that miner produces will be the only blocks users actually accept
+(<a href="#fig1128">Figure 28</a>).</p>
+</div>
+<div id="fig1128" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-28.svg" alt="11 28" width="75%">
+</div>
+<div class="title">Figure 28. One miner decides to go with the users’ will and only build small blocks. This miner will be able to pay the bills.</div>
+</div>
+<div class="paragraph">
+<p>This single miner will be rewarded for the block it created because the
+economic majority accepts the block. The blocks on the miner (big-block)
+chain are still pretty worthless because no users accept them. On top of
+this, the single small-block miner will be able to charge more fees than
+before because the total amount of block space is smaller—both because
+the maximum block weight is smaller and because the total number of
+blocks is smaller.</p>
+</div>
+<div class="paragraph">
+<p>Some more big-block miners will probably realize they’re quickly
+running out of money and decide to switch to the user-accepted branch
+(<a href="#fig1129">Figure 29</a>).</p>
+</div>
+<div id="fig1129" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-29.svg" alt="11 29" width="100%">
+</div>
+<div class="title">Figure 29. A few more miners realize it’s more profitable to work on the users’ branch.</div>
+</div>
+<div class="paragraph">
+<p>When more miners move over to the users’ branch, that branch will
+eventually grow stronger than the big-blocks branch. When this
+happens, the big-blocks branch will get wiped out (<a href="#fig1130">Figure 30</a>), and
+the remaining miners will automatically switch to the small-blocks
+branch because the change is a soft fork.</p>
+</div>
+<div id="fig1130" class="imageblock">
+<div class="content">
+<img src="images/ch11/11-30.svg" alt="11 30" width="100%">
+</div>
+<div class="title">Figure 30. The users’ branch is stronger and wipes out the big-blocks branch.</div>
+</div>
+<div class="paragraph">
+<p>Users win.</p>
+</div>
+<div class="paragraph">
+<p>One of the first soft forks in Bitcoin, the deployment of BIP16 (p2sh),
+was a user-activated soft fork. The deployment was manual in the sense
+that developers, on a specific day, manually counted the number of
+blocks that signaled support and then decided on a flag day that they
+put in the next release of the Bitcoin software. After this date, all
+blocks that didn’t comply with the new rules were rejected by nodes
+running this software.</p>
+</div>
+<div class="paragraph">
+<p>To use the insights from the recent segwit deployment, a new deployment
+mechanism is in the making as of this writing. It’s generally called a
+user-activated soft fork. The idea is to start with a BIP9-like
+deployment, but with the exception that if the deployment doesn’t get
+<code>LOCKED_IN</code> well before the timeout, blocks that don’t signal for the
+fork will be dropped. This will effectively cause 100% support because
+noncompliant blocks won’t count anymore, and the deployment will soon
+get <code>LOCKED_IN</code>.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_recap">11.4. Recap</h3>
+<div class="paragraph">
+<p>This chapter has taught you about hard forks and soft forks, and how to
+deploy soft forks without splitting the blockchain. We’ve talked about
+several miner-activated soft forks and a few user-activated soft forks.</p>
+</div>
+<div class="paragraph">
+<p>We can illustrate hard forks and soft forks as shown here.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-10.svg" alt="u11 10" width="75%">
+</div>
+</div>
+<div class="paragraph">
+<p>In a <em>hard fork,</em> the rules are <em>relaxed</em> so that a New block might be
+invalid according to Old rules. In the event of a blockchain split, the
+New branch might get wiped out by the Old branch.</p>
+</div>
+<div class="paragraph">
+<p>In a <em>soft fork</em>, the rules are <em>tightened</em>. Old blocks might be
+invalid according to New rules. In case of a blockchain split, the Old
+branch risks a wipeout.</p>
+</div>
+<div class="paragraph">
+<p>You can protect a hard fork against a wipeout by deliberately making the
+New branch incompatible with the Old branch. For example, Bitcoin Cash
+requires the first block after the split to have a base size &gt; 1,000,000
+bytes, which is invalid according to the Old rules. You can’t protect
+the Old branch in a soft fork from wipeout.</p>
+</div>
+<div class="paragraph">
+<p>To roll out a soft fork, care must be taken not to split the blockchain.
+If a split happens, and both branches remain active over a significant
+amount of time, it will cause a lot of pain for users, exchanges,
+miners, and so on.</p>
+</div>
+<div class="paragraph">
+<p>In a <em>miner-activated soft fork</em>, miners signal their support; when,
+for example, 95% of the blocks signal support, the new rules start being
+enforced after a grace period. BIP9 standardized this process.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-11.svg" alt="u11 11" width="100%">
+</div>
+</div>
+<div class="paragraph">
+<p>In a <em>user-activated soft fork</em>, users start enforcing the rules on a
+specific day (or block height). A standard for this is being developed
+as of this writing, and it will probably be a hybrid of BIP9 and
+user-activated soft fork.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-12.svg" alt="u11 12" width="100%">
+</div>
+</div>
+<div class="paragraph">
+<p>The difference from a pure BIP9 deployment is that the user-activated
+soft fork process is guaranteed to proceed to <code>ACTIVE</code> once the node has
+entered the <code>STARTED</code> state. In the <code>STARTED</code> state, miners have a
+chance to move the deployment to a <code>LOCKED_IN</code> state; but if they don’t,
+and the timeout has passed, then the supporting full nodes (including
+miners that support the upgrade) will start enforcing the rules anyway.</p>
+</div>
+<div class="paragraph">
+<p>A user-activated soft fork was used to deploy BIP16, p2sh, but it was
+done manually. Other than this, the community has no real-world
+experience with user-activated soft forks.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_exercises">11.5. Exercises</h3>
+<div class="sect3">
+<h4 id="_warm_up">11.5.1. Warm up</h4>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>A soft fork is a change of the consensus rules, but what
+characterizes the changes made in a soft fork?</p>
+</li>
+<li>
+<p>Suppose a hard fork causes a blockchain split, and the New branch
+has 51% of the hashrate. Furthermore, suppose the hashrate on the New
+branch drops to about 45%.</p>
+<div class="olist loweralpha">
+<ol class="loweralpha" type="a">
+<li>
+<p>What event will eventually happen?</p>
+</li>
+<li>
+<p>Why did I say that the event will <em>eventually</em> happen? When does
+the event occur?</p>
+</li>
+<li>
+<p>What can the developers of Bitcoin New do to prevent the event from
+happening?</p>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p>Suppose an Old node causes a blockchain split due to a soft fork in
+which 80% of the hashrate runs Bitcoin New. Will the Old branch of the
+split last long? Explain your answer.</p>
+</li>
+<li>
+<p>Suppose you try to deploy a soft fork using BIP9. Your deployment
+has just reached the <code>LOCKED_IN</code> state. How long do you have to wait
+before your rules start being enforced?</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_dig_in">11.5.2. Dig in</h4>
+<div class="olist arabic">
+<ol class="arabic" start="5">
+<li>
+<p>Suppose a fork changes the consensus rules such that Old nodes
+can create blocks invalid to New nodes, and New nodes can create blocks
+invalid to Old nodes.</p>
+<div class="imageblock">
+<div class="content">
+<img src="images/ch11/u11-13.svg" alt="u11 13" width="50%">
+</div>
+</div>
+<div class="paragraph">
+<p>What nodes (New, Old, both, or none), would be able to cause a
+blockchain split when this fork is deployed?</p>
+</div>
+</li>
+<li>
+<p>Why is it desirable to have a reassuring majority of the hashrate
+supporting Bitcoin New in a soft fork before starting to enforce the
+New rules?</p>
+</li>
+<li>
+<p>Suppose a hard fork has caused a permanent blockchain split and
+you’re about to make a payment using Bitcoin New. Why is replay
+protection desirable in this scenario?</p>
+</li>
+<li>
+<p>Suppose you want to deploy a soft fork using BIP9 with the
+following parameters:</p>
+<div class="listingblock">
+<div class="content">
+<pre>bit:        12
+start time: 2027-01-01 00:00:00
+timeout:    2028-01-01 00:00:00</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Also assume that the deployment is in <code>STARTED</code> state, all 2016 blocks
+in the current retarget period have been mined, and all of them signal
+support using bit 12. The last (2016th) block, B<sub>1</sub>, in the current
+retarget period has the following properties:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>timestamp T<sub>1</sub>:          2027-12-31 23:59:59
+median time past MTP<sub>1</sub>: 2027-12-31 23:59:58</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Will this deployment eventually get to the <code>ACTIVE</code> state?</p>
+</div>
+</li>
+<li>
+<p>Suppose you want to make a user-activated soft fork. You find
+it hard to convince other users to install your software. What would
+happen on the flag day if just a small percentage (&lt;30%) of the economy
+chose to run your software?</p>
+</li>
+<li>
+<p>Suppose you want to make a user-activated soft fork. Lots of
+other users seem to like your soft fork. Say that 80% of the economy
+installs your fork. Why would miners (even those that don’t like your
+change) probably switch to the New rules during this user-activated soft
+fork?</p>
+</li>
+<li>
+<p>In the previous exercise, your soft fork had support from 80%
+of the economy. Suppose also that a majority of the hashrate decides to
+follow your New rules. What happens with the nonmining nodes that don’t
+run your fork?</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_summary">11.6. Summary</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>You don’t want a blockchain split when deploying a fork because this
+would cause disruption in the Bitcoin economy.</p>
+</li>
+<li>
+<p>A hard fork is a consensus rule change that requires every miner to
+upgrade. Otherwise, the blockchain will split.</p>
+</li>
+<li>
+<p>A soft fork is a consensus rule change that doesn’t require
+simultaneous upgrade of the entire network.</p>
+</li>
+<li>
+<p>During a blockchain split due to a hard fork, you want wipeout
+protection to make sure the New branch isn’t reorged by Old nodes.</p>
+</li>
+<li>
+<p>In a blockchain split, you want replay protection to let you select
+what branch your transactions are applied to.</p>
+</li>
+<li>
+<p>A miner-activated soft fork—for example, one using BIP9 for
+deployment—lets miners deploy a noncontroversial soft fork.</p>
+</li>
+<li>
+<p>A user-activated soft fork lets users enforce a soft fork
+deployment. If a hashrate majority eventually follows, the soft fork
+succeeds without a lasting blockchain split.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2021-05-19 10:45:14 +0200
+</div>
+</div>
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  messageStyle: "none",
+  tex2jax: {
+    inlineMath: [["\\(", "\\)"]],
+    displayMath: [["\\[", "\\]"]],
+    ignoreClass: "nostem|nolatexmath"
+  },
+  asciimath2jax: {
+    delimiters: [["\\$", "\\$"]],
+    ignoreClass: "nostem|noasciimath"
+  },
+  TeX: { equationNumbers: { autoNumber: "none" } }
+})
+MathJax.Hub.Register.StartupHook("AsciiMath Jax Ready", function () {
+  MathJax.InputJax.AsciiMath.postfilterHooks.Add(function (data, node) {
+    if ((node = data.script.parentNode) && (node = node.parentNode) && node.classList.contains("stemblock")) {
+      data.math.root.display = "block"
+    }
+    return data
+  })
+})
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_HTMLorMML"></script>
+</body>
+</html>
